@@ -67,9 +67,9 @@ func (c *NsjailConfig) ToArgs(taskID string) []string {
 	case "allowlist":
 		args = append(args, "--disable_clone_newnet")
 	case "disabled":
-		args = append(args, "")
+		// No network access — do not append anything.
 	default:
-		args = append(args, "")
+		// No network access — do not append anything.
 	}
 
 	// Set working directory.
@@ -83,20 +83,18 @@ func (c *NsjailConfig) ToArgs(taskID string) []string {
 }
 
 // CommandArgs appends the executable command and arguments to the nsjail args.
-func (c *NsjailConfig) CommandArgs(command string, cmdArgs []string) []string {
-	args := c.ToArgs(command)
-	args = append(args, "--")
-	args = append(args, command)
+func (c *NsjailConfig) CommandArgs(taskID string, command string, cmdArgs []string) []string {
+	args := c.ToArgs(taskID)
+	args = append(args, "--", command)
 	args = append(args, cmdArgs...)
 	return args
 }
 
 // ScriptArgs appends the interpreter invocation to the nsjail args.
-func (c *NsjailConfig) ScriptArgs(interpreter, scriptContent string) []string {
+func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptContent string) []string {
 	interpPath := interpreterToPath(interpreter)
-	args := c.ToArgs(interpreter)
-	args = append(args, "--")
-	args = append(args, interpPath, "-c", scriptContent)
+	args := c.ToArgs(taskID)
+	args = append(args, "--", interpPath, "-c", scriptContent)
 	return args
 }
 

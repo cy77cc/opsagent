@@ -67,21 +67,27 @@ func TestNsjailConfigGenerate(t *testing.T) {
 
 func TestNsjailConfigCommand(t *testing.T) {
 	cfg := NsjailConfig{TimeLimit: 10, MemoryMB: 64, WorkDir: "/work"}
-	args := cfg.CommandArgs("echo", []string{"hello", "world"})
+	args := cfg.CommandArgs("task-001", "echo", []string{"hello", "world"})
 	argStr := strings.Join(args, " ")
 
 	if !strings.Contains(argStr, "-- echo hello world") {
 		t.Errorf("expected '-- echo hello world' in args, got: %s", argStr)
 	}
+	if !strings.Contains(argStr, "--name=sandbox-task-001") {
+		t.Errorf("expected '--name=sandbox-task-001' in args, got: %s", argStr)
+	}
 }
 
 func TestNsjailConfigScript(t *testing.T) {
 	cfg := NsjailConfig{TimeLimit: 10, MemoryMB: 64, WorkDir: "/work"}
-	args := cfg.ScriptArgs("bash", "echo hello")
+	args := cfg.ScriptArgs("task-002", "bash", "echo hello")
 	argStr := strings.Join(args, " ")
 
 	if !strings.Contains(argStr, "/bin/bash -c echo hello") {
 		t.Errorf("expected '/bin/bash -c echo hello', got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "--name=sandbox-task-002") {
+		t.Errorf("expected '--name=sandbox-task-002' in args, got: %s", argStr)
 	}
 }
 

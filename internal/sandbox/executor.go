@@ -113,8 +113,8 @@ func (e *Executor) ExecuteCommand(ctx context.Context, req ExecRequest, outputSe
 	}
 
 	nsCfg := e.buildNsjailConfig(req)
-	args := nsCfg.CommandArgs(req.Command, req.Args)
-	return e.run(ctx, req, args, outputSender)
+	args := nsCfg.CommandArgs(req.TaskID, req.Command, req.Args)
+	return e.run(ctx, req, nsCfg, args, outputSender)
 }
 
 // ExecuteScript validates the script against the policy, writes it to a temp file,
@@ -125,13 +125,13 @@ func (e *Executor) ExecuteScript(ctx context.Context, req ExecRequest, outputSen
 	}
 
 	nsCfg := e.buildNsjailConfig(req)
-	args := nsCfg.ScriptArgs(req.Interpreter, req.Script)
-	return e.run(ctx, req, args, outputSender)
+	args := nsCfg.ScriptArgs(req.TaskID, req.Interpreter, req.Script)
+	return e.run(ctx, req, nsCfg, args, outputSender)
 }
 
 // run is the core execution path: sets up cgroup, creates streamer, runs nsjail,
 // captures output, reads stats, and audit logs.
-func (e *Executor) run(ctx context.Context, req ExecRequest, nsjailArgs []string, outputSender OutputSender) (*ExecResult, error) {
+func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig, nsjailArgs []string, outputSender OutputSender) (*ExecResult, error) {
 	taskID := req.TaskID
 	startTime := time.Now()
 
@@ -140,10 +140,12 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsjailArgs []string
 	if err != nil {
 		return nil, fmt.Errorf("create cgroup: %w", err)
 	}
-	defer RemoveCgroup(cgroupPath)
+	defer func() {
+		KillCgroupProcesses(cgroupPath)
+		RemoveCgroup(cgroupPath)
+	}()
 
 	// Set cgroup limits.
-	nsCfg := e.buildNsjailConfig(req)
 	if err := SetCgroupLimits(cgroupPath, nsCfg.MemoryMB, nsCfg.CPUPercent, nsCfg.MaxPIDs); err != nil {
 		return nil, fmt.Errorf("set cgroup limits: %w", err)
 	}
@@ -215,6 +217,8 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsjailArgs []string
 			result.TimedOut = true
 			result.ExitCode = -1
 			result.Killed = true
+			// Kill cgroup processes on timeout.
+			KillCgroupProcesses(cgroupPath)
 		} else {
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
