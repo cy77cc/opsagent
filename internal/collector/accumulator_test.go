@@ -28,6 +28,23 @@ func TestAccumulatorAddFields(t *testing.T) {
 	}
 }
 
+func TestAccumulatorAddGauge(t *testing.T) {
+	acc := NewAccumulator(100)
+	acc.AddGauge("temperature", map[string]string{"host": "s1"}, map[string]interface{}{"value": 98.6})
+
+	metrics := acc.Collect()
+	if len(metrics) != 1 {
+		t.Fatalf("Collect() len = %d, want 1", len(metrics))
+	}
+	m := metrics[0]
+	if m.Type() != Gauge {
+		t.Errorf("Type() = %v, want %v (Gauge)", m.Type(), Gauge)
+	}
+	if m.Name() != "temperature" {
+		t.Errorf("Name() = %q, want %q", m.Name(), "temperature")
+	}
+}
+
 func TestAccumulatorAddCounter(t *testing.T) {
 	acc := NewAccumulator(100)
 	acc.AddCounter("requests", map[string]string{"path": "/api"}, map[string]interface{}{"count": int64(10)})

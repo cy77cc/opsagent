@@ -101,6 +101,59 @@ func TestRegistryAggregator(t *testing.T) {
 	}
 }
 
+func TestRegistryListOutputs(t *testing.T) {
+	r := NewRegistry()
+	r.RegisterOutput("alpha", func() Output { return &mockOutput{name: "alpha"} })
+	r.RegisterOutput("beta", func() Output { return &mockOutput{name: "beta"} })
+
+	names := r.ListOutputs()
+	if len(names) != 2 {
+		t.Fatalf("ListOutputs() len = %d, want 2", len(names))
+	}
+	if names[0] != "alpha" || names[1] != "beta" {
+		t.Errorf("ListOutputs() = %v, want [alpha beta]", names)
+	}
+}
+
+func TestRegistryListProcessors(t *testing.T) {
+	r := NewRegistry()
+	r.RegisterProcessor("nop", func() Processor { return &nopProcessor{} })
+
+	names := r.ListProcessors()
+	if len(names) != 1 || names[0] != "nop" {
+		t.Errorf("ListProcessors() = %v, want [nop]", names)
+	}
+}
+
+func TestRegistryListAggregators(t *testing.T) {
+	r := NewRegistry()
+	r.RegisterAggregator("sum", func() Aggregator { return &sumAggregator{} })
+
+	names := r.ListAggregators()
+	if len(names) != 1 || names[0] != "sum" {
+		t.Errorf("ListAggregators() = %v, want [sum]", names)
+	}
+}
+
+func TestDefaultRegistryConvenience(t *testing.T) {
+	// Save and restore default registry state
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	RegisterInput("test-input", func() Input { return &mockInput{name: "test-input"} })
+	RegisterOutput("test-output", func() Output { return &mockOutput{name: "test-output"} })
+
+	_, ok := DefaultRegistry.GetInput("test-input")
+	if !ok {
+		t.Error("DefaultRegistry.GetInput('test-input') not found")
+	}
+	_, ok = DefaultRegistry.GetOutput("test-output")
+	if !ok {
+		t.Error("DefaultRegistry.GetOutput('test-output') not found")
+	}
+}
+
 // nopProcessor is a test helper.
 type nopProcessor struct{}
 
