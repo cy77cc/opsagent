@@ -1,0 +1,47 @@
+agent:
+  id: "agent-local-001"
+  name: "local-dev-agent"
+  interval_seconds: 10
+
+server:
+  listen_addr: "0.0.0.0:18080"
+
+executor:
+  timeout_seconds: 10
+  max_output_bytes: 65536
+  allowed_commands:
+    - uptime
+    - df
+    - free
+    - whoami
+    - hostname
+    - ip
+    - ss
+
+reporter:
+  mode: "stdout" # stdout | http
+  endpoint: ""
+  timeout_seconds: 5
+  retry_count: 3
+  retry_interval_ms: 500
+
+auth:
+  enabled: false
+  bearer_token: ""
+
+prometheus:
+  enabled: true
+  path: "/metrics"
+  protect_with_auth: false
+
+plugin:
+  enabled: false
+  runtime_path: "./rust-runtime/target/release/nodeagentx-rust-runtime"
+  socket_path: "/tmp/nodeagentx/plugin.sock"
+  auto_start: true
+  startup_timeout_seconds: 5
+  request_timeout_seconds: 30
+  max_concurrent_tasks: 4
+  max_result_bytes: 8388608
+  chunk_size_bytes: 262144
+  sandbox_profile: "strict"

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(apt-get update:*)",
+      "Bash(apt-get install:*)",
+      "Bash(go install:*)",
+      "Bash(go build:*)",
+      "Bash(make proto-gen:*)",
+      "Bash(go vet:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
