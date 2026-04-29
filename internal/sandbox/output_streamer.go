@@ -37,8 +37,8 @@ func NewOutputStreamer(taskID, stream string, flushSize int, flushInterval time.
 }
 
 // Write appends data to the internal buffer and flushes if the buffer
-// has reached the configured size threshold.
-func (os *OutputStreamer) Write(data []byte) {
+// has reached the configured size threshold. Implements io.Writer.
+func (os *OutputStreamer) Write(data []byte) (int, error) {
 	os.mu.Lock()
 	os.buf = append(os.buf, data...)
 	shouldFlush := len(os.buf) >= os.flushSize
@@ -47,6 +47,7 @@ func (os *OutputStreamer) Write(data []byte) {
 	if shouldFlush {
 		os.Flush()
 	}
+	return len(data), nil
 }
 
 // Flush sends all buffered data via the sender callback and clears the buffer.

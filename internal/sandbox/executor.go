@@ -76,9 +76,7 @@ func NewExecutor(cfg Config, logger zerolog.Logger) *Executor {
 	if cfg.WorkDir == "" {
 		cfg.WorkDir = "/work"
 	}
-	if cfg.CgroupBase == "" {
-		cfg.CgroupBase = "/sys/fs/cgroup"
-	}
+	// CgroupBase is intentionally left empty by default, making cgroup features opt-in.
 	if cfg.MemoryMB <= 0 {
 		cfg.MemoryMB = 128
 	}
@@ -135,19 +133,23 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig,
 	taskID := req.TaskID
 	startTime := time.Now()
 
-	// Create cgroup for resource isolation.
-	cgroupPath, err := CreateCgroup(e.cfg.CgroupBase, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("create cgroup: %w", err)
-	}
-	defer func() {
-		KillCgroupProcesses(cgroupPath)
-		RemoveCgroup(cgroupPath)
-	}()
+	// Create cgroup for resource isolation (opt-in via CgroupBase).
+	var cgroupPath string
+	var err error
+	if e.cfg.CgroupBase != "" {
+		cgroupPath, err = CreateCgroup(e.cfg.CgroupBase, taskID)
+		if err != nil {
+			return nil, fmt.Errorf("create cgroup: %w", err)
+		}
+		defer func() {
+			KillCgroupProcesses(cgroupPath)
+			RemoveCgroup(cgroupPath)
+		}()
 
-	// Set cgroup limits.
-	if err := SetCgroupLimits(cgroupPath, nsCfg.MemoryMB, nsCfg.CPUPercent, nsCfg.MaxPIDs); err != nil {
-		return nil, fmt.Errorf("set cgroup limits: %w", err)
+		// Set cgroup limits.
+		if err := SetCgroupLimits(cgroupPath, nsCfg.MemoryMB, nsCfg.CPUPercent, nsCfg.MaxPIDs); err != nil {
+			return nil, fmt.Errorf("set cgroup limits: %w", err)
+		}
 	}
 
 	// Set up network isolation if allowlist mode.
@@ -218,7 +220,9 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig,
 			result.ExitCode = -1
 			result.Killed = true
 			// Kill cgroup processes on timeout.
-			KillCgroupProcesses(cgroupPath)
+			if cgroupPath != "" {
+				KillCgroupProcesses(cgroupPath)
+			}
 		} else {
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
@@ -235,8 +239,12 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig,
 	}
 
 	// Read cgroup stats.
-	if stats, err := ReadCgroupStats(cgroupPath); err == nil {
-		result.Stats = *stats
+	var statsPtr *Stats
+	if cgroupPath != "" {
+		if stats, err := ReadCgroupStats(cgroupPath); err == nil {
+			result.Stats = *stats
+			statsPtr = stats
+		}
 	}
 
 	// Audit log.
@@ -251,6 +259,7 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig,
 		TimedOut:    result.TimedOut,
 		Truncated:   result.Truncated,
 		Killed:      result.Killed,
+		Stats:       statsPtr,
 	})
 
 	return result, nil

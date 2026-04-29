@@ -20,9 +20,10 @@ type mockOutput struct {
 	name string
 }
 
-func (m *mockOutput) Write(_ []Metric) error { return nil }
-func (m *mockOutput) Close() error            { return nil }
-func (m *mockOutput) SampleConfig() string    { return "" }
+func (m *mockOutput) Init(_ map[string]interface{}) error { return nil }
+func (m *mockOutput) Write(_ []Metric) error              { return nil }
+func (m *mockOutput) Close() error                        { return nil }
+func (m *mockOutput) SampleConfig() string                { return "" }
 
 func TestRegistryInput(t *testing.T) {
 	r := NewRegistry()

@@ -1,121 +1,310 @@
 # NodeAgentX
 
-NodeAgentX 是面向 OpsPilot 控制面的主机侧执行与指标采集 Agent。
+NodeAgentX 是面向 OpsPilot 控制面的主机侧执行与指标采集 Agent，包含两大核心子系统：
 
-## 项目介绍
+- **Telegraf 风格指标采集管线** — Input → Processor → Aggregator → Output 插件架构
+- **nsjail 沙箱执行引擎** — 命名空间隔离 + cgroup v2 资源限制 + 安全策略
 
-当前核心能力：
+## 核心能力
 
-1. 主机指标采集（gopsutil）
-2. 受限远程命令执行（白名单、超时、输出截断）
-3. AI 任务分发 API
-4. Reporter 支持 `stdout` 与 `http`（含重试）
-5. 可选 Bearer Token 鉴权
-6. Prometheus 文本导出端点
-7. Rust 插件 runtime（UDS JSON-RPC）
+| 能力 | 说明 |
+|------|------|
+| 指标采集管线 | 12 个内置插件，支持 CPU/内存/磁盘/网络/进程采集，标签注入，聚合，多路输出 |
+| 远程命令执行 | 白名单策略、超时控制、输出截断 |
+| 沙箱执行 | nsjail PID/NET/MNT 命名空间隔离，cgroup v2 内存/CPU/PID 限制 |
+| gRPC 双向流 | Agent 主动连接平台，支持注册、心跳、指标上报、命令/脚本下发 |
+| 脚本执行 | 沙箱内运行 bash/python3 脚本，实时流式输出 |
+| Rust 插件 runtime | UDS JSON-RPC，支持日志解析、文本处理、eBPF 采集等 |
+| 安全策略 | 命令白名单/黑名单、脚本关键字拦截、shell 注入检测 |
+| 离线缓冲 | 环形缓存断线期间指标，重连后自动回放 |
+| Prometheus 导出 | 内置 `/metrics` 端点 |
 
-## 架构说明
+## 架构
 
-`run` 启动链路：
+```
+┌─────────────────────────────────────────────────────┐
+│                    Platform (OpsPilot)                │
+│         gRPC Server ← 双向流 → Agent Client          │
+└───────────────────────┬───────────────────────────────┘
+                        │
+┌───────────────────────┴───────────────────────────────┐
+│                   NodeAgentX Agent                     │
+│                                                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  │
+│  │  Collector   │  │  Sandbox    │  │  Executor    │  │
+│  │  Pipeline    │  │  (nsjail)   │  │  (local)     │  │
+│  │             │  │             │  │              │  │
+│  │ Input ──►   │  │ 命令/脚本    │  │ 直接执行      │  │
+│  │ Processor ──►│  │ 隔离执行    │  │              │  │
+│  │ Aggregator ──►│  └─────────────┘  └──────────────┘  │
+│  │ Output ──►  │                                       │
+│  └─────────────┘  ┌─────────────┐  ┌──────────────┐  │
+│                   │ gRPC Client │  │ Plugin Runtime│  │
+│                   │ 心跳/重连/缓存│  │ (Rust UDS)   │  │
+│                   └─────────────┘  └──────────────┘  │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │              HTTP Server (:18080)                │  │
+│  │  /healthz  /api/v1/exec  /api/v1/tasks  /metrics│  │
+│  └─────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────┘
+```
 
-1. 加载配置
-2. 初始化日志
-3. （可选）拉起 rust-runtime 子进程
-4. 启动 HTTP Server
-5. 周期采集指标
-6. 上报采集结果（stdout/http）
+## 内置插件
 
-核心模块：
+### Input 插件（采集）
 
-- `collector`：指标采集接口与实现
-- `executor`：命令执行安全边界
-- `task`：任务模型与分发
-- `pluginruntime`：Rust runtime 本地 RPC 客户端与生命周期管理
-- `server`：API、鉴权中间件、Prometheus 导出
-- `reporter`：上报策略（stdout/http）
-- `app`：生命周期编排
+| 插件 | type | 说明 | 可选 config |
+|------|------|------|------------|
+| CPU | `cpu` | CPU 使用率 | `per_cpu`, `total_cpu` |
+| 内存 | `memory` | 虚拟内存 + swap | — |
+| 磁盘 | `disk` | 磁盘用量 | `mount_points` |
+| 网络 | `net` | 网络 I/O 计数器 | — |
+| 进程 | `process` | Top-N 进程 | `top_n` |
+
+### Processor 插件（处理）
+
+| 插件 | type | 说明 | config |
+|------|------|------|--------|
+| 标签器 | `tagger` | 静态/条件标签注入 | `tags`, `rules` |
+| 正则替换 | `regex` | 标签值正则变换 | `tags[].key`, `pattern`, `replacement` |
+
+### Aggregator 插件（聚合）
+
+| 插件 | type | 说明 | config |
+|------|------|------|--------|
+| 平均值 | `avg` | 指标平均值 | `fields`, `period` |
+| 求和 | `sum` | 指标累加 | `fields`, `period` |
+
+### Output 插件（输出）
+
+| 插件 | type | 说明 | config |
+|------|------|------|--------|
+| HTTP | `http` | JSON POST + 重试 | `url`, `timeout`, `retry_count` |
+| Prometheus | `prometheus` | 文本格式暴露 | `path`, `addr` |
+| Prometheus Remote Write | `prometheus_remote_write` | 远程写入 | `url`, `timeout` |
 
 ## 快速启动
 
 ```bash
+# 安装依赖
 make tidy
-make test
-go run ./cmd/agent run --config ./configs/config.yaml
+
+# 运行测试（含 race detector）
+make test-race
+
+# 编译
+make build
+
+# 运行
+./bin/nodeagentx run --config ./configs/config.yaml
+
+# Smoke test（build + test + vet + security + sandbox check + integration）
+./scripts/smoke-test.sh
 ```
 
-## Rust Runtime 构建
+## 配置
 
-```bash
-make rust-build
+完整配置示例见 `configs/config.yaml`。关键配置项：
+
+```yaml
+# Agent 基本信息
+agent:
+  id: "agent-001"
+  name: "web-server-01"
+  interval_seconds: 10        # 指标采集间隔
+
+# 指标采集管线
+collector:
+  inputs:
+    - type: cpu
+      config: { per_cpu: false }
+    - type: memory
+      config: {}
+    - type: disk
+      config: {}
+    - type: net
+      config: {}
+  processors:
+    - type: tagger
+      config: { tags: { env: "production" } }
+  outputs:
+    - type: http
+      config: { url: "https://metrics.example.com/push" }
+
+# gRPC 连接平台
+grpc:
+  server_addr: "platform.example.com:443"
+  enroll_token: "your-token"
+  mtls:
+    cert_file: "/etc/nodeagentx/certs/client.crt"
+    key_file: "/etc/nodeagentx/certs/client.key"
+    ca_file: "/etc/nodeagentx/certs/ca.crt"
+  heartbeat_interval_seconds: 15
+
+# 沙箱执行
+sandbox:
+  enabled: true
+  nsjail_path: "/usr/bin/nsjail"
+  policy:
+    allowed_commands: [echo, ls, cat, grep, df, free]
+    blocked_commands: [rm, mkfs, dd]
+    allowed_interpreters: [bash, python3]
+    script_max_bytes: 65536
+    shell_injection_check: true
+
+# 命令执行器
+executor:
+  timeout_seconds: 10
+  allowed_commands: [uptime, df, free, hostname]
+
+# Reporter
+reporter:
+  mode: "stdout"  # stdout | http
+
+# API 鉴权
+auth:
+  enabled: false
+  bearer_token: ""
+
+# Prometheus 导出
+prometheus:
+  enabled: true
+  path: "/metrics"
+
+# Rust 插件
+plugin:
+  enabled: false
+  runtime_path: "./rust-runtime/target/release/nodeagentx-rust-runtime"
+  socket_path: "/tmp/nodeagentx/plugin.sock"
 ```
 
-默认 runtime 路径：`./rust-runtime/target/release/nodeagentx-rust-runtime`
-
-## 配置说明
-
-关键配置：
-
-- `executor.allowed_commands`：命令白名单
-- `reporter.mode`：`stdout` 或 `http`
-- `auth.enabled`：开启 API Bearer 鉴权
-- `prometheus.path`：Prometheus 导出路径
-- `plugin.enabled`：开启 Rust 插件任务
-- `plugin.socket_path`：本地 UDS 套接字
-- `plugin.max_result_bytes` / `plugin.chunk_size_bytes`：大结果分块与上限
-
-## API 示例
-
-健康检查：
+## API
 
 ```bash
-curl -s http://127.0.0.1:18080/healthz
-curl -s http://127.0.0.1:18080/readyz
-```
+# 健康检查
+curl http://127.0.0.1:18080/healthz
+curl http://127.0.0.1:18080/readyz
 
-执行命令：
-
-```bash
-curl -s -X POST http://127.0.0.1:18080/api/v1/exec \
+# 执行命令
+curl -X POST http://127.0.0.1:18080/api/v1/exec \
   -H 'Content-Type: application/json' \
   -d '{"command":"df","args":["-h"],"timeout_seconds":10}'
+
+# 沙箱执行命令
+curl -X POST http://127.0.0.1:18080/api/v1/tasks \
+  -H 'Content-Type: application/json' \
+  -d '{"task_id":"t1","type":"sandbox_exec","payload":{"command":"echo","args":["hello"]}}'
+
+# 沙箱执行脚本
+curl -X POST http://127.0.0.1:18080/api/v1/tasks \
+  -H 'Content-Type: application/json' \
+  -d '{"task_id":"t2","type":"sandbox_exec","payload":{"interpreter":"bash","script":"df -h && free -h"}}'
+
+# Rust 插件任务
+curl -X POST http://127.0.0.1:18080/api/v1/tasks \
+  -H 'Content-Type: application/json' \
+  -d '{"task_id":"t3","type":"plugin_text_process","payload":{"text":"hello","operation":"uppercase"}}'
+
+# Prometheus 指标
+curl http://127.0.0.1:18080/metrics
 ```
 
-Rust 插件任务（文本处理）：
+## Makefile 目标
+
+| 目标 | 说明 |
+|------|------|
+| `make build` | 编译 Agent 到 `bin/nodeagentx` |
+| `make build-all` | 交叉编译 amd64 + arm64 |
+| `make package` | 打包两个架构的安装包 (`dist/*.tar.gz`) |
+| `make package-amd64` | 仅打包 amd64 |
+| `make package-arm64` | 仅打包 arm64 |
+| `make clean` | 清理 bin/ dist/ coverage.out |
+| `make test` | 运行所有测试 |
+| `make test-race` | 运行测试（含 race detector） |
+| `make test-cover` | 测试覆盖率报告 |
+| `make lint` | golangci-lint |
+| `make vet` | go vet 静态分析 |
+| `make proto` | 从 proto 生成 Go 代码 |
+| `make rust-build` | 编译 Rust runtime |
+| `make sandbox-check` | 检查 nsjail/cgroup/namespace 前置条件 |
+| `make integration` | 运行集成测试 |
+| `make integration-sandbox` | 运行沙箱集成测试（需 root） |
+| `make security` | gosec 安全扫描 |
+| `make ci` | CI 流水线（tidy + vet + test-race + security） |
+
+## 打包与安装
 
 ```bash
-curl -s -X POST http://127.0.0.1:18080/api/v1/tasks \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "task_id":"tp-1",
-    "type":"plugin_text_process",
-    "payload":{"text":"hello world","operation":"uppercase"}
-  }'
-```
+# 打包（开发机）
+make package
+# dist/nodeagentx-<version>-linux-amd64.tar.gz
+# dist/nodeagentx-<version>-linux-arm64.tar.gz
 
-Rust 插件任务（日志解析）：
+# 安装（目标机器）
+tar xzf nodeagentx-<version>-linux-amd64.tar.gz
+cd nodeagentx-<version>-linux-amd64
+sudo ./install.sh
 
-```bash
-curl -s -X POST http://127.0.0.1:18080/api/v1/tasks \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "task_id":"lp-1",
-    "type":"plugin_log_parse",
-    "payload":{"text":"INFO ok\nWARN high cpu\nERROR timeout"}
-  }'
+# 管理服务
+sudo systemctl start nodeagentx
+sudo systemctl enable nodeagentx
+sudo journalctl -u nodeagentx -f
+
+# 卸载
+sudo ./uninstall.sh
 ```
 
 ## 安全边界
 
-1. 禁止 `sh -c` 与 shell 字符串拼接
-2. 必须使用白名单 + `exec.CommandContext`
-3. 必须设置执行超时
-4. stdout/stderr 限制最大输出字节
-5. Rust 任务走独立子进程与本地 socket，便于隔离与熔断
-6. eBPF 任务在 runtime 内默认可降级返回（能力不可用时）
+1. 命令白名单 + `exec.CommandContext`，禁止 `sh -c` 拼接
+2. 沙箱执行：nsjail PID/NET/MNT 命名空间隔离
+3. cgroup v2 资源限制：内存上限、CPU 配额、PID 数量
+4. 脚本安全：关键字黑名单 + shell 注入检测
+5. stdout/stderr 输出字节上限
+6. Rust 插件走独立子进程 + 本地 socket，便于隔离与熔断
+7. 可选 mTLS + Bearer Token 鉴权
 
-## Roadmap
+## 平台集成
 
-1. Rust runtime seccomp/namespace 强化落地
-2. 插件任务熔断与重启策略细化
-3. 文件扫描与安全探测规则系统
-4. eBPF 多内核版本兼容矩阵
+详见 [platform-integration-guide.md](docs/platform-integration-guide.md)，包含：
+
+- gRPC proto 定义与消息类型
+- 平台端 Go 服务端完整实现示例
+- 消息交互流程（注册、心跳、指标、命令执行、脚本执行）
+- 配置参考与故障排查
+
+## 项目结构
+
+```
+NodeAgentX/
+├── cmd/agent/                    # 入口
+├── internal/
+│   ├── app/                      # Agent 生命周期编排
+│   ├── collector/                # 采集管线
+│   │   ├── inputs/               #   cpu, memory, disk, net, process
+│   │   ├── processors/           #   regex, tagger
+│   │   ├── aggregators/          #   avg, sum
+│   │   └── outputs/              #   http, prometheus, promrw
+│   ├── config/                   # 配置加载与验证
+│   ├── executor/                 # 本地命令执行
+│   ├── grpcclient/               # gRPC 客户端（连接/发送/接收/缓存）
+│   │   └── proto/                #   生成的 protobuf 代码
+│   ├── integration/              # 集成测试
+│   ├── logger/                   # zerolog 封装
+│   ├── pluginruntime/            # Rust 插件 runtime 客户端
+│   ├── reporter/                 # 上报策略 (stdout/http)
+│   ├── sandbox/                  # nsjail 沙箱执行引擎
+│   ├── server/                   # HTTP API + Prometheus 导出
+│   └── task/                     # 任务模型与分发
+├── proto/                        # gRPC proto 定义
+├── rust-runtime/                 # Rust 插件 runtime
+├── configs/config.yaml           # 默认配置
+├── scripts/
+│   ├── package.sh                # 交叉编译打包脚本 (amd64/arm64)
+│   ├── uninstall.sh              # 卸载脚本
+│   ├── smoke-test.sh             # Smoke test 脚本
+│   └── dev.sh                    # 开发运行脚本
+├── docs/                         # 文档
+│   └── platform-integration-guide.md
+└── Makefile
+```

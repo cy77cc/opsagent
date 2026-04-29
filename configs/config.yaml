@@ -45,3 +45,56 @@ plugin:
   max_result_bytes: 8388608
   chunk_size_bytes: 262144
   sandbox_profile: "strict"
+
+grpc:
+  server_addr: "platform.example.com:443"
+  enroll_token: ""
+  mtls:
+    cert_file: ""
+    key_file: ""
+    ca_file: ""
+  heartbeat_interval_seconds: 15
+  reconnect_initial_backoff_ms: 1000
+  reconnect_max_backoff_ms: 30000
+
+sandbox:
+  enabled: false
+  nsjail_path: "/usr/bin/nsjail"
+  base_workdir: "/tmp/nodeagentx/sandbox"
+  default_timeout_seconds: 30
+  max_concurrent_tasks: 4
+  cgroup_base_path: "/sys/fs/cgroup/nodeagentx"
+  audit_log_path: "/var/log/nodeagentx/audit.log"
+  policy:
+    allowed_commands:
+      - echo
+      - ls
+      - cat
+      - grep
+      - wc
+    blocked_commands:
+      - rm
+      - mkfs
+      - dd
+    blocked_keywords:
+      - "rm -rf /"
+    allowed_interpreters:
+      - bash
+      - python3
+    script_max_bytes: 65536
+    shell_injection_check: true
+
+collector:
+  inputs:
+    - type: cpu
+      config:
+        per_cpu: false
+    - type: memory
+      config: {}
+    - type: disk
+      config: {}
+    - type: net
+      config: {}
+  processors: []
+  aggregators: []
+  outputs: []

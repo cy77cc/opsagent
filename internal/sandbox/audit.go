@@ -19,7 +19,7 @@ type AuditEvent struct {
 	TimedOut    bool          `json:"timed_out"`
 	Truncated   bool          `json:"truncated"`
 	Killed      bool          `json:"killed"`
-	Stats       string        `json:"stats,omitempty"`
+	Stats       *Stats        `json:"stats,omitempty"`
 	Error       string        `json:"error,omitempty"`
 }
 
@@ -60,7 +60,18 @@ func (al *AuditLogger) LogExecution(event AuditEvent) {
 		Bool("timed_out", event.TimedOut).
 		Bool("truncated", event.Truncated).
 		Bool("killed", event.Killed).
-		Str("stats", event.Stats).
-		Str("error", event.Error).
-		Msg("sandbox execution")
+		Str("error", event.Error)
+
+	// Log stats fields individually if available.
+	if event.Stats != nil {
+		ev = ev.
+			Int64("stats_peak_memory_bytes", event.Stats.PeakMemoryBytes).
+			Int64("stats_cpu_time_user_ms", event.Stats.CPUTimeUserMs).
+			Int64("stats_cpu_time_system_ms", event.Stats.CPUTimeSystemMs).
+			Int32("stats_process_count", event.Stats.ProcessCount).
+			Int64("stats_bytes_written", event.Stats.BytesWritten).
+			Int64("stats_bytes_read", event.Stats.BytesRead)
+	}
+
+	ev.Msg("sandbox execution")
 }

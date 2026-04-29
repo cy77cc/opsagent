@@ -17,4 +17,5 @@ const (
 	TypePluginFSScan      = "plugin_fs_scan"
 	TypePluginConnAnalyze = "plugin_conn_analyze"
 	TypePluginLocalProbe  = "plugin_local_probe"
+	TypeSandboxExec       = "sandbox_exec"
 )

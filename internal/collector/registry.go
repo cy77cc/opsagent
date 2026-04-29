@@ -103,6 +103,16 @@ func RegisterOutput(name string, f OutputFactory) {
 	DefaultRegistry.RegisterOutput(name, f)
 }
 
+// RegisterProcessor registers a Processor factory in the default registry.
+func RegisterProcessor(name string, f ProcessorFactory) {
+	DefaultRegistry.RegisterProcessor(name, f)
+}
+
+// RegisterAggregator registers an Aggregator factory in the default registry.
+func RegisterAggregator(name string, f AggregatorFactory) {
+	DefaultRegistry.RegisterAggregator(name, f)
+}
+
 // sortedKeys returns the sorted keys of a map.
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))

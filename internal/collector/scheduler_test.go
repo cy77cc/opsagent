@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // testInput is an Input that records Gather calls and emits a fixed metric.
@@ -46,7 +48,7 @@ func TestSchedulerRunsInput(t *testing.T) {
 		Tags:     map[string]string{"env": "test"},
 	}
 
-	sched := NewScheduler([]ScheduledInput{si})
+	sched := NewScheduler([]ScheduledInput{si}, zerolog.Nop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -76,7 +78,7 @@ func TestSchedulerMultipleInputs(t *testing.T) {
 	si1 := ScheduledInput{Input: input1, Interval: 50 * time.Millisecond}
 	si2 := ScheduledInput{Input: input2, Interval: 50 * time.Millisecond}
 
-	sched := NewScheduler([]ScheduledInput{si1, si2})
+	sched := NewScheduler([]ScheduledInput{si1, si2}, zerolog.Nop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -103,7 +105,7 @@ func TestSchedulerStop(t *testing.T) {
 	input := newTestInput("cpu", nil, map[string]interface{}{"v": 1.0})
 	si := ScheduledInput{Input: input, Interval: 50 * time.Millisecond}
 
-	sched := NewScheduler([]ScheduledInput{si})
+	sched := NewScheduler([]ScheduledInput{si}, zerolog.Nop())
 	ctx := context.Background()
 	ch := sched.Start(ctx)
 
@@ -132,7 +134,7 @@ func TestSchedulerAppliesStaticTags(t *testing.T) {
 		Tags:     map[string]string{"env": "prod", "region": "us-east"},
 	}
 
-	sched := NewScheduler([]ScheduledInput{si})
+	sched := NewScheduler([]ScheduledInput{si}, zerolog.Nop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

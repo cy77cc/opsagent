@@ -1,18 +1,6 @@
 package collector
 
-import (
-	"context"
-	"time"
-)
-
-// Accumulator is the interface inputs use to emit metrics.
-type Accumulator interface {
-	AddFields(name string, tags map[string]string, fields map[string]interface{})
-	AddGauge(name string, tags map[string]string, fields map[string]interface{})
-	AddCounter(name string, tags map[string]string, fields map[string]interface{})
-	AddFieldsWithTimestamp(name string, tags map[string]string, fields map[string]interface{}, ts time.Time)
-	Collect() []*Metric
-}
+import "context"
 
 // Input is a plugin that gathers metrics on a schedule.
 type Input interface {

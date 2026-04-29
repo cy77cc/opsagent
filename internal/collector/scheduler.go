@@ -4,7 +4,12 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 )
+
+// defaultAccumulatorSize is the default buffer capacity for per-gather accumulators.
+const defaultAccumulatorSize = 1000
 
 // ScheduledInput pairs an Input with its collection interval and static tags.
 type ScheduledInput struct {
@@ -16,14 +21,20 @@ type ScheduledInput struct {
 // Scheduler runs multiple inputs on their own intervals and sends
 // collected metric batches to a shared output channel.
 type Scheduler struct {
-	inputs []ScheduledInput
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	inputs         []ScheduledInput
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
+	logger         zerolog.Logger
+	AccumulatorSize int
 }
 
 // NewScheduler creates a Scheduler for the given inputs.
-func NewScheduler(inputs []ScheduledInput) *Scheduler {
-	return &Scheduler{inputs: inputs}
+func NewScheduler(inputs []ScheduledInput, logger zerolog.Logger) *Scheduler {
+	return &Scheduler{
+		inputs:          inputs,
+		logger:          logger,
+		AccumulatorSize: defaultAccumulatorSize,
+	}
 }
 
 // Start begins collection goroutines for each input. It returns a channel
@@ -71,9 +82,14 @@ func (s *Scheduler) runInput(ctx context.Context, si ScheduledInput, ch chan<- [
 }
 
 func (s *Scheduler) gatherOnce(ctx context.Context, si ScheduledInput, ch chan<- []*Metric) {
-	acc := NewAccumulator(1000)
+	accSize := s.AccumulatorSize
+	if accSize <= 0 {
+		accSize = defaultAccumulatorSize
+	}
+	acc := NewAccumulator(accSize)
 
 	if err := si.Input.Gather(ctx, acc); err != nil {
+		s.logger.Error().Err(err).Msg("gather failed")
 		return
 	}
 

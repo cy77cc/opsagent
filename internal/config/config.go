@@ -16,6 +16,9 @@ type Config struct {
 	Auth       AuthConfig       `mapstructure:"auth"`
 	Prometheus PrometheusConfig `mapstructure:"prometheus"`
 	Plugin     PluginConfig     `mapstructure:"plugin"`
+	GRPC       GRPCConfig       `mapstructure:"grpc"`
+	Sandbox    SandboxConfig    `mapstructure:"sandbox"`
+	Collector  CollectorConfig  `mapstructure:"collector"`
 }
 
 // AgentConfig controls agent identity and collection cadence.
@@ -73,6 +76,59 @@ type PluginConfig struct {
 	SandboxProfile        string `mapstructure:"sandbox_profile"`
 }
 
+// GRPCConfig controls the gRPC client connection to the platform.
+type GRPCConfig struct {
+	ServerAddr                string     `mapstructure:"server_addr"`
+	EnrollToken               string     `mapstructure:"enroll_token"`
+	MTLS                      MTLSConfig `mapstructure:"mtls"`
+	HeartbeatIntervalSeconds  int        `mapstructure:"heartbeat_interval_seconds"`
+	ReconnectInitialBackoffMS int        `mapstructure:"reconnect_initial_backoff_ms"`
+	ReconnectMaxBackoffMS     int        `mapstructure:"reconnect_max_backoff_ms"`
+}
+
+// MTLSConfig holds mutual TLS certificate paths.
+type MTLSConfig struct {
+	CertFile string `mapstructure:"cert_file"`
+	KeyFile  string `mapstructure:"key_file"`
+	CAFile   string `mapstructure:"ca_file"`
+}
+
+// SandboxConfig controls nsjail sandbox execution.
+type SandboxConfig struct {
+	Enabled               bool         `mapstructure:"enabled"`
+	NsjailPath            string       `mapstructure:"nsjail_path"`
+	BaseWorkdir           string       `mapstructure:"base_workdir"`
+	DefaultTimeoutSeconds int          `mapstructure:"default_timeout_seconds"`
+	MaxConcurrentTasks    int          `mapstructure:"max_concurrent_tasks"`
+	CgroupBasePath        string       `mapstructure:"cgroup_base_path"`
+	AuditLogPath          string       `mapstructure:"audit_log_path"`
+	Policy                PolicyConfig `mapstructure:"policy"`
+}
+
+// PolicyConfig defines the sandbox security policy.
+type PolicyConfig struct {
+	AllowedCommands     []string `mapstructure:"allowed_commands"`
+	BlockedCommands     []string `mapstructure:"blocked_commands"`
+	BlockedKeywords     []string `mapstructure:"blocked_keywords"`
+	AllowedInterpreters []string `mapstructure:"allowed_interpreters"`
+	ScriptMaxBytes      int      `mapstructure:"script_max_bytes"`
+	ShellInjectionCheck bool     `mapstructure:"shell_injection_check"`
+}
+
+// CollectorConfig defines the metric collection pipeline.
+type CollectorConfig struct {
+	Inputs      []PluginInstanceConfig `mapstructure:"inputs"`
+	Processors  []PluginInstanceConfig `mapstructure:"processors"`
+	Aggregators []PluginInstanceConfig `mapstructure:"aggregators"`
+	Outputs     []PluginInstanceConfig `mapstructure:"outputs"`
+}
+
+// PluginInstanceConfig is a single plugin instance in the collector pipeline.
+type PluginInstanceConfig struct {
+	Type   string                 `mapstructure:"type"`
+	Config map[string]interface{} `mapstructure:"config"`
+}
+
 // Load reads and validates configuration from a file path.
 func Load(path string) (*Config, error) {
 	v := viper.New()
@@ -101,6 +157,14 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("plugin.max_result_bytes", 8388608)
 	v.SetDefault("plugin.chunk_size_bytes", 262144)
 	v.SetDefault("plugin.sandbox_profile", "strict")
+	v.SetDefault("grpc.heartbeat_interval_seconds", 15)
+	v.SetDefault("grpc.reconnect_initial_backoff_ms", 1000)
+	v.SetDefault("grpc.reconnect_max_backoff_ms", 30000)
+	v.SetDefault("sandbox.enabled", false)
+	v.SetDefault("sandbox.default_timeout_seconds", 30)
+	v.SetDefault("sandbox.max_concurrent_tasks", 4)
+	v.SetDefault("sandbox.policy.shell_injection_check", true)
+	v.SetDefault("sandbox.policy.script_max_bytes", 65536)
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -202,6 +266,48 @@ func (c *Config) Validate() error {
 		}
 		if strings.TrimSpace(c.Plugin.SandboxProfile) == "" {
 			return fmt.Errorf("plugin.sandbox_profile is required")
+		}
+	}
+
+	// GRPC validation.
+	if strings.TrimSpace(c.GRPC.ServerAddr) == "" {
+		return fmt.Errorf("grpc.server_addr is required")
+	}
+	if c.GRPC.HeartbeatIntervalSeconds <= 0 {
+		return fmt.Errorf("grpc.heartbeat_interval_seconds must be > 0")
+	}
+	if c.GRPC.ReconnectInitialBackoffMS <= 0 {
+		return fmt.Errorf("grpc.reconnect_initial_backoff_ms must be > 0")
+	}
+	if c.GRPC.ReconnectMaxBackoffMS <= 0 {
+		return fmt.Errorf("grpc.reconnect_max_backoff_ms must be > 0")
+	}
+
+	// Sandbox validation (only when enabled).
+	if c.Sandbox.Enabled {
+		if strings.TrimSpace(c.Sandbox.NsjailPath) == "" {
+			return fmt.Errorf("sandbox.nsjail_path is required when sandbox.enabled=true")
+		}
+		if strings.TrimSpace(c.Sandbox.BaseWorkdir) == "" {
+			return fmt.Errorf("sandbox.base_workdir is required when sandbox.enabled=true")
+		}
+		if c.Sandbox.DefaultTimeoutSeconds <= 0 {
+			return fmt.Errorf("sandbox.default_timeout_seconds must be > 0")
+		}
+		if c.Sandbox.MaxConcurrentTasks <= 0 {
+			return fmt.Errorf("sandbox.max_concurrent_tasks must be > 0")
+		}
+		if strings.TrimSpace(c.Sandbox.CgroupBasePath) == "" {
+			return fmt.Errorf("sandbox.cgroup_base_path is required when sandbox.enabled=true")
+		}
+		if strings.TrimSpace(c.Sandbox.AuditLogPath) == "" {
+			return fmt.Errorf("sandbox.audit_log_path is required when sandbox.enabled=true")
+		}
+		if len(c.Sandbox.Policy.AllowedCommands) == 0 {
+			return fmt.Errorf("sandbox.policy.allowed_commands must not be empty when sandbox.enabled=true")
+		}
+		if c.Sandbox.Policy.ScriptMaxBytes <= 0 {
+			return fmt.Errorf("sandbox.policy.script_max_bytes must be > 0")
 		}
 	}
 

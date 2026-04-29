@@ -5,6 +5,17 @@ import (
 	"time"
 )
 
+// Accumulator is the interface inputs use to emit metrics.
+type Accumulator interface {
+	AddFields(name string, tags map[string]string, fields map[string]interface{})
+	AddGauge(name string, tags map[string]string, fields map[string]interface{})
+	AddCounter(name string, tags map[string]string, fields map[string]interface{})
+	AddFieldsWithTimestamp(name string, tags map[string]string, fields map[string]interface{}, ts time.Time)
+	AddGaugeWithTimestamp(name string, tags map[string]string, fields map[string]interface{}, ts time.Time)
+	AddCounterWithTimestamp(name string, tags map[string]string, fields map[string]interface{}, ts time.Time)
+	Collect() []*Metric
+}
+
 type accumulator struct {
 	mu      sync.Mutex
 	metrics []*Metric
@@ -34,6 +45,14 @@ func (a *accumulator) AddCounter(name string, tags map[string]string, fields map
 
 func (a *accumulator) AddFieldsWithTimestamp(name string, tags map[string]string, fields map[string]interface{}, ts time.Time) {
 	a.add(name, tags, fields, Gauge, ts)
+}
+
+func (a *accumulator) AddGaugeWithTimestamp(name string, tags map[string]string, fields map[string]interface{}, ts time.Time) {
+	a.add(name, tags, fields, Gauge, ts)
+}
+
+func (a *accumulator) AddCounterWithTimestamp(name string, tags map[string]string, fields map[string]interface{}, ts time.Time) {
+	a.add(name, tags, fields, Counter, ts)
 }
 
 func (a *accumulator) add(name string, tags map[string]string, fields map[string]interface{}, mt MetricType, ts time.Time) {
