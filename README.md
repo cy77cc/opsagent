@@ -264,6 +264,24 @@ sudo ./uninstall.sh
 6. Rust 插件走独立子进程 + 本地 socket，便于隔离与熔断
 7. 可选 mTLS + Bearer Token 鉴权
 
+## CI/CD
+
+项目使用 GitHub Actions 自动化：
+
+**CI** (`.github/workflows/ci.yml`) — 每次 push/PR 自动运行：
+- `go mod tidy` + `go vet` + `go build` + `go test -race`
+
+**Release** (`.github/workflows/release.yml`) — 推送 `v*` tag 自动发布：
+- 交叉编译 amd64 + arm64
+- 打包 tar.gz（含二进制、配置、systemd 服务、安装/卸载脚本）
+- 创建 GitHub Release 并上传产物
+
+```bash
+# 触发自动发布
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 ## 平台集成
 
 详见 [platform-integration-guide.md](docs/platform-integration-guide.md)，包含：
@@ -301,9 +319,13 @@ NodeAgentX/
 ├── configs/config.yaml           # 默认配置
 ├── scripts/
 │   ├── package.sh                # 交叉编译打包脚本 (amd64/arm64)
+│   ├── ci-package.sh             # CI 打包脚本（被 package.sh 和 Actions 调用）
 │   ├── uninstall.sh              # 卸载脚本
 │   ├── smoke-test.sh             # Smoke test 脚本
 │   └── dev.sh                    # 开发运行脚本
+├── .github/workflows/
+│   ├── ci.yml                    # CI: build + test + vet
+│   └── release.yml               # Release: 交叉编译 + 打包 + 发布
 ├── docs/                         # 文档
 │   └── platform-integration-guide.md
 └── Makefile

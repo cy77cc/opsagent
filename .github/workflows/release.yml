@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: nodeagentx
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Get version
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Build ${{ matrix.goarch }}
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags="-s -w" \
+            -o dist/${{ matrix.goarch }}/${{ env.APP_NAME }} ./cmd/agent
+
+      - name: Package ${{ matrix.goarch }}
+        env:
+          VERSION: ${{ steps.version.outputs.tag }}
+          ARCH: ${{ matrix.goarch }}
+        run: bash scripts/ci-package.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.goarch }}
+          path: dist/*.tar.gz
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: NodeAgentX ${{ steps.version.outputs.tag }}
+          body: |
+            ## NodeAgentX ${{ steps.version.outputs.tag }}
+
+            ### Downloads
+            | Architecture | Package |
+            |---|---|
+            | x86_64 | `nodeagentx-${{ steps.version.outputs.tag }}-linux-amd64.tar.gz` |
+            | arm64 | `nodeagentx-${{ steps.version.outputs.tag }}-linux-arm64.tar.gz` |
+
+            ### Install
+            ```bash
+            tar xzf nodeagentx-${{ steps.version.outputs.tag }}-linux-amd64.tar.gz
+            cd nodeagentx-${{ steps.version.outputs.tag }}-linux-amd64
+            sudo ./install.sh
+            ```
+
+            ### Uninstall
+            ```bash
+            sudo ./uninstall.sh
+            ```
+          files: dist/*.tar.gz
+          draft: false
+          prerelease: false
