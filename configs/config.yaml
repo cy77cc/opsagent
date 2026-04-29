@@ -97,6 +97,19 @@ collector:
       config: {}
     - type: net
       config: {}
+    - type: load
+      config: {}
+    - type: diskio
+      config:
+        # devices: ["sda", "nvme0n1"]
+    - type: temp
+      config: {}
+    - type: gpu
+      config:
+        # bin_path: "/usr/bin/nvidia-smi"
+    - type: connections
+      config:
+        # states: ["ESTABLISHED", "LISTEN"]
   processors: []
   aggregators: []
   outputs: []
