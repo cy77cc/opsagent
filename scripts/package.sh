@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# package.sh — Cross-compile and package NodeAgentX for x86_64 and arm64.
-# Produces: dist/nodeagentx-<version>-linux-<arch>.tar.gz
+# package.sh — Cross-compile and package OpsAgent for x86_64 and arm64.
+# Produces: dist/opsagent-<version>-linux-<arch>.tar.gz
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-export APP_NAME="${APP_NAME:-nodeagentx}"
+export APP_NAME="${APP_NAME:-opsagent}"
 export VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}"
 
 # Support single-arch builds via ARCHITECTURES=amd64 env var
@@ -19,7 +19,7 @@ fi
 
 LDFLAGS="-s -w"
 
-echo "NodeAgentX Packager — version: ${VERSION}"
+echo "OpsAgent Packager — version: ${VERSION}"
 echo ""
 
 mkdir -p dist

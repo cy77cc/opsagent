@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
-	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
+	"github.com/cy77cc/opsagent/internal/collector"
+	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 )
 
 // Config holds configuration for the gRPC client.

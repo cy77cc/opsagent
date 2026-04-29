@@ -3,7 +3,7 @@
 # Used by GitHub Actions release workflow and local packaging.
 #
 # Required env vars:
-#   APP_NAME  — binary/package name (e.g. nodeagentx)
+#   APP_NAME  — binary/package name (e.g. opsagent)
 #   VERSION   — version string (e.g. v1.0.0)
 #   ARCH      — goarch (amd64 or arm64)
 #
@@ -39,8 +39,8 @@ cp configs/config.yaml "${PKG_DIR}/etc/${APP_NAME}/config.yaml"
 # Systemd service
 cat > "${PKG_DIR}/etc/systemd/system/${APP_NAME}.service" <<EOF
 [Unit]
-Description=NodeAgentX Host Agent
-Documentation=https://github.com/cy77cc/nodeagentx
+Description=OpsAgent Host Agent
+Documentation=https://github.com/cy77cc/opsagent
 After=network-online.target
 Wants=network-online.target
 
@@ -70,14 +70,14 @@ cat > "${PKG_DIR}/install.sh" <<'INSTALLEOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="nodeagentx"
+APP_NAME="opsagent"
 
 if [[ $EUID -ne 0 ]]; then
     echo "Error: This script must be run as root (use sudo)"
     exit 1
 fi
 
-echo "Installing NodeAgentX..."
+echo "Installing OpsAgent..."
 
 mkdir -p /etc/${APP_NAME}
 mkdir -p /var/log/${APP_NAME}

@@ -1,5 +1,5 @@
-APP_NAME=nodeagentx
-RUST_RUNTIME=nodeagentx-rust-runtime
+APP_NAME=opsagent
+RUST_RUNTIME=opsagent-rust-runtime
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 .PHONY: tidy test test-race test-cover build build-all run lint vet proto proto-gen \

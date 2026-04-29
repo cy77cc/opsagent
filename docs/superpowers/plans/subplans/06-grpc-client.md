@@ -1,6 +1,6 @@
 # Sub-Plan 6: gRPC Client
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** [Sub-Plan 1: Proto & gRPC Foundation](01-proto-grpc.md), [Sub-Plan 2: Collector Pipeline Core](02-collector-pipeline.md)
 
 **Goal:** Implement the gRPC client with connection management, heartbeat, reconnection, message sending/receiving, and local metric cache.
@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestCacheAddAndDrain(t *testing.T) {
@@ -107,7 +107,7 @@ package grpcclient
 import (
 	"sync"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // MetricCache is a ring buffer for caching metrics during disconnection.
@@ -204,8 +204,8 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
-	pb "nodeagentx/internal/grpcclient/proto"
+	"opsagent/internal/collector"
+	pb "opsagent/internal/grpcclient/proto"
 )
 
 func TestSenderBatchToProto(t *testing.T) {
@@ -255,8 +255,8 @@ package grpcclient
 import (
 	"time"
 
-	"nodeagentx/internal/collector"
-	pb "nodeagentx/internal/grpcclient/proto"
+	"opsagent/internal/collector"
+	pb "opsagent/internal/grpcclient/proto"
 )
 
 // Sender handles converting and sending outbound messages.
@@ -405,7 +405,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	pb "nodeagentx/internal/grpcclient/proto"
+	pb "opsagent/internal/grpcclient/proto"
 )
 
 // CommandHandler is called when the platform sends an ExecuteCommand.
@@ -503,7 +503,7 @@ package grpcclient
 import (
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestClientConfig(t *testing.T) {
@@ -563,8 +563,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 
-	"nodeagentx/internal/collector"
-	pb "nodeagentx/internal/grpcclient/proto"
+	"opsagent/internal/collector"
+	pb "opsagent/internal/grpcclient/proto"
 )
 
 // Config holds gRPC client configuration.

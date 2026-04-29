@@ -1,4 +1,4 @@
-module github.com/cy77cc/nodeagentx
+module github.com/cy77cc/opsagent
 
 go 1.26.1
 

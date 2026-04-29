@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/cy77cc/nodeagentx/internal/app"
+	"github.com/cy77cc/opsagent/internal/app"
 )
 
 func main() {

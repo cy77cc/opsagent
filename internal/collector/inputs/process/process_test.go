@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 func TestProcessInputInit(t *testing.T) {

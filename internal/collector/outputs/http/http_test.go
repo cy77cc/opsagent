@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 func TestHTTPOutput_Init(t *testing.T) {

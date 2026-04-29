@@ -150,7 +150,7 @@ func TestValidatePluginRuntimePathRequiredWhenAutoStart(t *testing.T) {
 	cfg.Plugin = PluginConfig{
 		Enabled:               true,
 		AutoStart:             true,
-		SocketPath:            "/tmp/github.com/cy77cc/nodeagentx/plugin.sock",
+		SocketPath:            "/tmp/github.com/cy77cc/opsagent/plugin.sock",
 		RuntimePath:           "",
 		StartupTimeoutSeconds: 5,
 		RequestTimeoutSeconds: 30,

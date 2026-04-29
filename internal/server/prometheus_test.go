@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 func TestRenderPrometheus(t *testing.T) {
@@ -20,13 +20,13 @@ func TestRenderPrometheus(t *testing.T) {
 		LoadAverage: collector.LoadAverage{Load1: 1.1, Load5: 2.2, Load15: 3.3},
 	}
 	out := renderPrometheus(payload, 7, time.Now().Add(-10*time.Second), time.Now())
-	if !strings.Contains(out, "nodeagentx_agent_up 1") {
+	if !strings.Contains(out, "opsagent_agent_up 1") {
 		t.Fatalf("missing agent_up metric")
 	}
-	if !strings.Contains(out, "nodeagentx_metrics_collected_total 7") {
+	if !strings.Contains(out, "opsagent_metrics_collected_total 7") {
 		t.Fatalf("missing collected counter")
 	}
-	if !strings.Contains(out, "nodeagentx_cpu_usage_percent 11.2000") {
+	if !strings.Contains(out, "opsagent_cpu_usage_percent 11.2000") {
 		t.Fatalf("missing cpu metric")
 	}
 }

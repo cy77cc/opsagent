@@ -7,12 +7,11 @@
 package proto
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -633,7 +632,7 @@ type Metric struct {
 	Tags          map[string]string      `protobuf:"bytes,2,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Fields        []*Field               `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty"`
 	TimestampMs   int64                  `protobuf:"varint,4,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
-	Type          MetricType             `protobuf:"varint,5,opt,name=type,proto3,enum=github.com/cy77cc/nodeagentx.MetricType" json:"type,omitempty"`
+	Type          MetricType             `protobuf:"varint,5,opt,name=type,proto3,enum=opsagent.MetricType" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1497,32 +1496,31 @@ var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\n" +
-	"github.com/cy77cc/nodeagentx\"\xe5\x02\n" +
-	"\fAgentMessage\x12C\n" +
-	"\fregistration\x18\x01 \x01(\v2\x1d.github.com/cy77cc/nodeagentx.AgentRegistrationH\x00R\fregistration\x125\n" +
-	"\theartbeat\x18\x02 \x01(\v2\x15.github.com/cy77cc/nodeagentx.HeartbeatH\x00R\theartbeat\x123\n" +
-	"\ametrics\x18\x03 \x01(\v2\x17.github.com/cy77cc/nodeagentx.MetricBatchH\x00R\ametrics\x129\n" +
-	"\vexec_output\x18\x04 \x01(\v2\x16.github.com/cy77cc/nodeagentx.ExecOutputH\x00R\n" +
-	"execOutput\x129\n" +
-	"\vexec_result\x18\x05 \x01(\v2\x16.github.com/cy77cc/nodeagentx.ExecResultH\x00R\n" +
-	"execResult\x12#\n" +
-	"\x03ack\x18\x06 \x01(\v2\x0f.github.com/cy77cc/nodeagentx.AckH\x00R\x03ackB\t\n" +
-	"\apayload\"\xb9\x02\n" +
-	"\x0fPlatformMessage\x12?\n" +
-	"\fexec_command\x18\x01 \x01(\v2\x1a.github.com/cy77cc/nodeagentx.ExecuteCommandH\x00R\vexecCommand\x12<\n" +
-	"\vexec_script\x18\x02 \x01(\v2\x19.github.com/cy77cc/nodeagentx.ExecuteScriptH\x00R\n" +
-	"execScript\x126\n" +
+	"\x11proto/agent.proto\x12\bopsagent\"\xd9\x02\n" +
+	"\fAgentMessage\x12A\n" +
+	"\fregistration\x18\x01 \x01(\v2\x1b.opsagent.AgentRegistrationH\x00R\fregistration\x123\n" +
+	"\theartbeat\x18\x02 \x01(\v2\x13.opsagent.HeartbeatH\x00R\theartbeat\x121\n" +
+	"\ametrics\x18\x03 \x01(\v2\x15.opsagent.MetricBatchH\x00R\ametrics\x127\n" +
+	"\vexec_output\x18\x04 \x01(\v2\x14.opsagent.ExecOutputH\x00R\n" +
+	"execOutput\x127\n" +
+	"\vexec_result\x18\x05 \x01(\v2\x14.opsagent.ExecResultH\x00R\n" +
+	"execResult\x12!\n" +
+	"\x03ack\x18\x06 \x01(\v2\r.opsagent.AckH\x00R\x03ackB\t\n" +
+	"\apayload\"\xaf\x02\n" +
+	"\x0fPlatformMessage\x12=\n" +
+	"\fexec_command\x18\x01 \x01(\v2\x18.opsagent.ExecuteCommandH\x00R\vexecCommand\x12:\n" +
+	"\vexec_script\x18\x02 \x01(\v2\x17.opsagent.ExecuteScriptH\x00R\n" +
+	"execScript\x124\n" +
 	"\n" +
-	"cancel_job\x18\x03 \x01(\v2\x15.github.com/cy77cc/nodeagentx.CancelJobH\x00R\tcancelJob\x12?\n" +
-	"\rconfig_update\x18\x04 \x01(\v2\x18.github.com/cy77cc/nodeagentx.ConfigUpdateH\x00R\fconfigUpdate\x12#\n" +
-	"\x03ack\x18\x05 \x01(\v2\x0f.github.com/cy77cc/nodeagentx.AckH\x00R\x03ackB\t\n" +
-	"\apayload\"\x9e\x01\n" +
+	"cancel_job\x18\x03 \x01(\v2\x13.opsagent.CancelJobH\x00R\tcancelJob\x12=\n" +
+	"\rconfig_update\x18\x04 \x01(\v2\x16.opsagent.ConfigUpdateH\x00R\fconfigUpdate\x12!\n" +
+	"\x03ack\x18\x05 \x01(\v2\r.opsagent.AckH\x00R\x03ackB\t\n" +
+	"\apayload\"\x9c\x01\n" +
 	"\x11AgentRegistration\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\tR\x05token\x124\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x122\n" +
 	"\n" +
-	"agent_info\x18\x03 \x01(\v2\x15.github.com/cy77cc/nodeagentx.AgentInfoR\tagentInfo\x12\"\n" +
+	"agent_info\x18\x03 \x01(\v2\x13.opsagent.AgentInfoR\tagentInfo\x12\"\n" +
 	"\fcapabilities\x18\x04 \x03(\tR\fcapabilities\"\xe7\x01\n" +
 	"\tAgentInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
@@ -1532,21 +1530,21 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\tcpu_cores\x18\x05 \x01(\x05R\bcpuCores\x12!\n" +
 	"\fmemory_bytes\x18\x06 \x01(\x03R\vmemoryBytes\x12#\n" +
 	"\rrunning_tasks\x18\a \x01(\x05R\frunningTasks\x12\x1b\n" +
-	"\tmax_tasks\x18\b \x01(\x05R\bmaxTasks\"\x97\x01\n" +
+	"\tmax_tasks\x18\b \x01(\x05R\bmaxTasks\"\x95\x01\n" +
 	"\tHeartbeat\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12!\n" +
 	"\ftimestamp_ms\x18\x02 \x01(\x03R\vtimestampMs\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06status\x124\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x122\n" +
 	"\n" +
-	"agent_info\x18\x04 \x01(\v2\x15.github.com/cy77cc/nodeagentx.AgentInfoR\tagentInfo\";\n" +
-	"\vMetricBatch\x12,\n" +
-	"\ametrics\x18\x01 \x03(\v2\x12.github.com/cy77cc/nodeagentx.MetricR\ametrics\"\x81\x02\n" +
+	"agent_info\x18\x04 \x01(\v2\x13.opsagent.AgentInfoR\tagentInfo\"9\n" +
+	"\vMetricBatch\x12*\n" +
+	"\ametrics\x18\x01 \x03(\v2\x10.opsagent.MetricR\ametrics\"\xfb\x01\n" +
 	"\x06Metric\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x120\n" +
-	"\x04tags\x18\x02 \x03(\v2\x1c.github.com/cy77cc/nodeagentx.Metric.TagsEntryR\x04tags\x12)\n" +
-	"\x06fields\x18\x03 \x03(\v2\x11.github.com/cy77cc/nodeagentx.FieldR\x06fields\x12!\n" +
-	"\ftimestamp_ms\x18\x04 \x01(\x03R\vtimestampMs\x12*\n" +
-	"\x04type\x18\x05 \x01(\x0e2\x16.github.com/cy77cc/nodeagentx.MetricTypeR\x04type\x1a7\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12.\n" +
+	"\x04tags\x18\x02 \x03(\v2\x1a.opsagent.Metric.TagsEntryR\x04tags\x12'\n" +
+	"\x06fields\x18\x03 \x03(\v2\x0f.opsagent.FieldR\x06fields\x12!\n" +
+	"\ftimestamp_ms\x18\x04 \x01(\x03R\vtimestampMs\x12(\n" +
+	"\x04type\x18\x05 \x01(\x0e2\x14.opsagent.MetricTypeR\x04type\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xac\x01\n" +
@@ -1557,25 +1555,25 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\fstring_value\x18\x04 \x01(\tH\x00R\vstringValue\x12\x1f\n" +
 	"\n" +
 	"bool_value\x18\x05 \x01(\bH\x00R\tboolValueB\a\n" +
-	"\x05value\"\xa4\x02\n" +
+	"\x05value\"\xa0\x02\n" +
 	"\x0eExecuteCommand\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
-	"\x04args\x18\x03 \x03(\tR\x04args\x125\n" +
-	"\x03env\x18\x04 \x03(\v2#.github.com/cy77cc/nodeagentx.ExecuteCommand.EnvEntryR\x03env\x12'\n" +
-	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\x123\n" +
-	"\asandbox\x18\x06 \x01(\v2\x19.github.com/cy77cc/nodeagentx.SandboxConfigR\asandbox\x1a6\n" +
+	"\x04args\x18\x03 \x03(\tR\x04args\x123\n" +
+	"\x03env\x18\x04 \x03(\v2!.opsagent.ExecuteCommand.EnvEntryR\x03env\x12'\n" +
+	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\x121\n" +
+	"\asandbox\x18\x06 \x01(\v2\x17.opsagent.SandboxConfigR\asandbox\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc2\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbe\x02\n" +
 	"\rExecuteScript\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12 \n" +
 	"\vinterpreter\x18\x02 \x01(\tR\vinterpreter\x12\x16\n" +
 	"\x06script\x18\x03 \x01(\tR\x06script\x12\x12\n" +
-	"\x04args\x18\x04 \x03(\tR\x04args\x124\n" +
-	"\x03env\x18\x05 \x03(\v2\".github.com/cy77cc/nodeagentx.ExecuteScript.EnvEntryR\x03env\x12'\n" +
-	"\x0ftimeout_seconds\x18\x06 \x01(\x05R\x0etimeoutSeconds\x123\n" +
-	"\asandbox\x18\a \x01(\v2\x19.github.com/cy77cc/nodeagentx.SandboxConfigR\asandbox\x1a6\n" +
+	"\x04args\x18\x04 \x03(\tR\x04args\x122\n" +
+	"\x03env\x18\x05 \x03(\v2 .opsagent.ExecuteScript.EnvEntryR\x03env\x12'\n" +
+	"\x0ftimeout_seconds\x18\x06 \x01(\x05R\x0etimeoutSeconds\x121\n" +
+	"\asandbox\x18\a \x01(\v2\x17.opsagent.SandboxConfigR\asandbox\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd3\x01\n" +
@@ -1592,7 +1590,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x16\n" +
 	"\x06stream\x18\x02 \x01(\tR\x06stream\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\fR\x04data\x12!\n" +
-	"\ftimestamp_ms\x18\x04 \x01(\x03R\vtimestampMs\"\xe3\x01\n" +
+	"\ftimestamp_ms\x18\x04 \x01(\x03R\vtimestampMs\"\xe1\x01\n" +
 	"\n" +
 	"ExecResult\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1b\n" +
@@ -1601,8 +1599,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"durationMs\x12\x1b\n" +
 	"\ttimed_out\x18\x04 \x01(\bR\btimedOut\x12\x1c\n" +
 	"\ttruncated\x18\x05 \x01(\bR\ttruncated\x12\x16\n" +
-	"\x06killed\x18\x06 \x01(\bR\x06killed\x12+\n" +
-	"\x05stats\x18\a \x01(\v2\x15.github.com/cy77cc/nodeagentx.ExecStatsR\x05stats\"\xf6\x01\n" +
+	"\x06killed\x18\x06 \x01(\bR\x06killed\x12)\n" +
+	"\x05stats\x18\a \x01(\v2\x13.opsagent.ExecStatsR\x05stats\"\xf6\x01\n" +
 	"\tExecStats\x12*\n" +
 	"\x11peak_memory_bytes\x18\x01 \x01(\x03R\x0fpeakMemoryBytes\x12'\n" +
 	"\x10cpu_time_user_ms\x18\x02 \x01(\x03R\rcpuTimeUserMs\x12+\n" +
@@ -1626,9 +1624,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"MetricType\x12\t\n" +
 	"\x05GAUGE\x10\x00\x12\v\n" +
 	"\aCOUNTER\x10\x01\x12\r\n" +
-	"\tHISTOGRAM\x10\x022T\n" +
-	"\fAgentService\x12D\n" +
-	"\aConnect\x12\x18.github.com/cy77cc/nodeagentx.AgentMessage\x1a\x1b.github.com/cy77cc/nodeagentx.PlatformMessage(\x010\x01B&Z$github.com/cy77cc/nodeagentx/internal/grpcclient/protob\x06proto3"
+	"\tHISTOGRAM\x10\x022P\n" +
+	"\fAgentService\x12@\n" +
+	"\aConnect\x12\x16.opsagent.AgentMessage\x1a\x19.opsagent.PlatformMessage(\x010\x01B$Z\"opsagent/internal/grpcclient/protob\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -1645,53 +1643,53 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_proto_agent_proto_goTypes = []any{
-	(MetricType)(0),           // 0: github.com/cy77cc/nodeagentx.MetricType
-	(*AgentMessage)(nil),      // 1: github.com/cy77cc/nodeagentx.AgentMessage
-	(*PlatformMessage)(nil),   // 2: github.com/cy77cc/nodeagentx.PlatformMessage
-	(*AgentRegistration)(nil), // 3: github.com/cy77cc/nodeagentx.AgentRegistration
-	(*AgentInfo)(nil),         // 4: github.com/cy77cc/nodeagentx.AgentInfo
-	(*Heartbeat)(nil),         // 5: github.com/cy77cc/nodeagentx.Heartbeat
-	(*MetricBatch)(nil),       // 6: github.com/cy77cc/nodeagentx.MetricBatch
-	(*Metric)(nil),            // 7: github.com/cy77cc/nodeagentx.Metric
-	(*Field)(nil),             // 8: github.com/cy77cc/nodeagentx.Field
-	(*ExecuteCommand)(nil),    // 9: github.com/cy77cc/nodeagentx.ExecuteCommand
-	(*ExecuteScript)(nil),     // 10: github.com/cy77cc/nodeagentx.ExecuteScript
-	(*SandboxConfig)(nil),     // 11: github.com/cy77cc/nodeagentx.SandboxConfig
-	(*ExecOutput)(nil),        // 12: github.com/cy77cc/nodeagentx.ExecOutput
-	(*ExecResult)(nil),        // 13: github.com/cy77cc/nodeagentx.ExecResult
-	(*ExecStats)(nil),         // 14: github.com/cy77cc/nodeagentx.ExecStats
-	(*CancelJob)(nil),         // 15: github.com/cy77cc/nodeagentx.CancelJob
-	(*ConfigUpdate)(nil),      // 16: github.com/cy77cc/nodeagentx.ConfigUpdate
-	(*Ack)(nil),               // 17: github.com/cy77cc/nodeagentx.Ack
-	nil,                       // 18: github.com/cy77cc/nodeagentx.Metric.TagsEntry
-	nil,                       // 19: github.com/cy77cc/nodeagentx.ExecuteCommand.EnvEntry
-	nil,                       // 20: github.com/cy77cc/nodeagentx.ExecuteScript.EnvEntry
+	(MetricType)(0),           // 0: opsagent.MetricType
+	(*AgentMessage)(nil),      // 1: opsagent.AgentMessage
+	(*PlatformMessage)(nil),   // 2: opsagent.PlatformMessage
+	(*AgentRegistration)(nil), // 3: opsagent.AgentRegistration
+	(*AgentInfo)(nil),         // 4: opsagent.AgentInfo
+	(*Heartbeat)(nil),         // 5: opsagent.Heartbeat
+	(*MetricBatch)(nil),       // 6: opsagent.MetricBatch
+	(*Metric)(nil),            // 7: opsagent.Metric
+	(*Field)(nil),             // 8: opsagent.Field
+	(*ExecuteCommand)(nil),    // 9: opsagent.ExecuteCommand
+	(*ExecuteScript)(nil),     // 10: opsagent.ExecuteScript
+	(*SandboxConfig)(nil),     // 11: opsagent.SandboxConfig
+	(*ExecOutput)(nil),        // 12: opsagent.ExecOutput
+	(*ExecResult)(nil),        // 13: opsagent.ExecResult
+	(*ExecStats)(nil),         // 14: opsagent.ExecStats
+	(*CancelJob)(nil),         // 15: opsagent.CancelJob
+	(*ConfigUpdate)(nil),      // 16: opsagent.ConfigUpdate
+	(*Ack)(nil),               // 17: opsagent.Ack
+	nil,                       // 18: opsagent.Metric.TagsEntry
+	nil,                       // 19: opsagent.ExecuteCommand.EnvEntry
+	nil,                       // 20: opsagent.ExecuteScript.EnvEntry
 }
 var file_proto_agent_proto_depIdxs = []int32{
-	3,  // 0: github.com/cy77cc/nodeagentx.AgentMessage.registration:type_name -> github.com/cy77cc/nodeagentx.AgentRegistration
-	5,  // 1: github.com/cy77cc/nodeagentx.AgentMessage.heartbeat:type_name -> github.com/cy77cc/nodeagentx.Heartbeat
-	6,  // 2: github.com/cy77cc/nodeagentx.AgentMessage.metrics:type_name -> github.com/cy77cc/nodeagentx.MetricBatch
-	12, // 3: github.com/cy77cc/nodeagentx.AgentMessage.exec_output:type_name -> github.com/cy77cc/nodeagentx.ExecOutput
-	13, // 4: github.com/cy77cc/nodeagentx.AgentMessage.exec_result:type_name -> github.com/cy77cc/nodeagentx.ExecResult
-	17, // 5: github.com/cy77cc/nodeagentx.AgentMessage.ack:type_name -> github.com/cy77cc/nodeagentx.Ack
-	9,  // 6: github.com/cy77cc/nodeagentx.PlatformMessage.exec_command:type_name -> github.com/cy77cc/nodeagentx.ExecuteCommand
-	10, // 7: github.com/cy77cc/nodeagentx.PlatformMessage.exec_script:type_name -> github.com/cy77cc/nodeagentx.ExecuteScript
-	15, // 8: github.com/cy77cc/nodeagentx.PlatformMessage.cancel_job:type_name -> github.com/cy77cc/nodeagentx.CancelJob
-	16, // 9: github.com/cy77cc/nodeagentx.PlatformMessage.config_update:type_name -> github.com/cy77cc/nodeagentx.ConfigUpdate
-	17, // 10: github.com/cy77cc/nodeagentx.PlatformMessage.ack:type_name -> github.com/cy77cc/nodeagentx.Ack
-	4,  // 11: github.com/cy77cc/nodeagentx.AgentRegistration.agent_info:type_name -> github.com/cy77cc/nodeagentx.AgentInfo
-	4,  // 12: github.com/cy77cc/nodeagentx.Heartbeat.agent_info:type_name -> github.com/cy77cc/nodeagentx.AgentInfo
-	7,  // 13: github.com/cy77cc/nodeagentx.MetricBatch.metrics:type_name -> github.com/cy77cc/nodeagentx.Metric
-	18, // 14: github.com/cy77cc/nodeagentx.Metric.tags:type_name -> github.com/cy77cc/nodeagentx.Metric.TagsEntry
-	8,  // 15: github.com/cy77cc/nodeagentx.Metric.fields:type_name -> github.com/cy77cc/nodeagentx.Field
-	0,  // 16: github.com/cy77cc/nodeagentx.Metric.type:type_name -> github.com/cy77cc/nodeagentx.MetricType
-	19, // 17: github.com/cy77cc/nodeagentx.ExecuteCommand.env:type_name -> github.com/cy77cc/nodeagentx.ExecuteCommand.EnvEntry
-	11, // 18: github.com/cy77cc/nodeagentx.ExecuteCommand.sandbox:type_name -> github.com/cy77cc/nodeagentx.SandboxConfig
-	20, // 19: github.com/cy77cc/nodeagentx.ExecuteScript.env:type_name -> github.com/cy77cc/nodeagentx.ExecuteScript.EnvEntry
-	11, // 20: github.com/cy77cc/nodeagentx.ExecuteScript.sandbox:type_name -> github.com/cy77cc/nodeagentx.SandboxConfig
-	14, // 21: github.com/cy77cc/nodeagentx.ExecResult.stats:type_name -> github.com/cy77cc/nodeagentx.ExecStats
-	1,  // 22: github.com/cy77cc/nodeagentx.AgentService.Connect:input_type -> github.com/cy77cc/nodeagentx.AgentMessage
-	2,  // 23: github.com/cy77cc/nodeagentx.AgentService.Connect:output_type -> github.com/cy77cc/nodeagentx.PlatformMessage
+	3,  // 0: opsagent.AgentMessage.registration:type_name -> opsagent.AgentRegistration
+	5,  // 1: opsagent.AgentMessage.heartbeat:type_name -> opsagent.Heartbeat
+	6,  // 2: opsagent.AgentMessage.metrics:type_name -> opsagent.MetricBatch
+	12, // 3: opsagent.AgentMessage.exec_output:type_name -> opsagent.ExecOutput
+	13, // 4: opsagent.AgentMessage.exec_result:type_name -> opsagent.ExecResult
+	17, // 5: opsagent.AgentMessage.ack:type_name -> opsagent.Ack
+	9,  // 6: opsagent.PlatformMessage.exec_command:type_name -> opsagent.ExecuteCommand
+	10, // 7: opsagent.PlatformMessage.exec_script:type_name -> opsagent.ExecuteScript
+	15, // 8: opsagent.PlatformMessage.cancel_job:type_name -> opsagent.CancelJob
+	16, // 9: opsagent.PlatformMessage.config_update:type_name -> opsagent.ConfigUpdate
+	17, // 10: opsagent.PlatformMessage.ack:type_name -> opsagent.Ack
+	4,  // 11: opsagent.AgentRegistration.agent_info:type_name -> opsagent.AgentInfo
+	4,  // 12: opsagent.Heartbeat.agent_info:type_name -> opsagent.AgentInfo
+	7,  // 13: opsagent.MetricBatch.metrics:type_name -> opsagent.Metric
+	18, // 14: opsagent.Metric.tags:type_name -> opsagent.Metric.TagsEntry
+	8,  // 15: opsagent.Metric.fields:type_name -> opsagent.Field
+	0,  // 16: opsagent.Metric.type:type_name -> opsagent.MetricType
+	19, // 17: opsagent.ExecuteCommand.env:type_name -> opsagent.ExecuteCommand.EnvEntry
+	11, // 18: opsagent.ExecuteCommand.sandbox:type_name -> opsagent.SandboxConfig
+	20, // 19: opsagent.ExecuteScript.env:type_name -> opsagent.ExecuteScript.EnvEntry
+	11, // 20: opsagent.ExecuteScript.sandbox:type_name -> opsagent.SandboxConfig
+	14, // 21: opsagent.ExecResult.stats:type_name -> opsagent.ExecStats
+	1,  // 22: opsagent.AgentService.Connect:input_type -> opsagent.AgentMessage
+	2,  // 23: opsagent.AgentService.Connect:output_type -> opsagent.PlatformMessage
 	23, // [23:24] is the sub-list for method output_type
 	22, // [22:23] is the sub-list for method input_type
 	22, // [22:22] is the sub-list for extension type_name

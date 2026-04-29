@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cy77cc/nodeagentx/internal/executor"
-	"github.com/cy77cc/nodeagentx/internal/task"
+	"github.com/cy77cc/opsagent/internal/executor"
+	"github.com/cy77cc/opsagent/internal/task"
 	"github.com/rs/zerolog"
 )
 

@@ -3,7 +3,7 @@ package collector
 import (
 	"time"
 
-	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
+	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 )
 
 // MetricType represents the type of a metric.

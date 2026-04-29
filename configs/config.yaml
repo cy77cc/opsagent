@@ -36,8 +36,8 @@ prometheus:
 
 plugin:
   enabled: false
-  runtime_path: "./rust-runtime/target/release/nodeagentx-rust-runtime"
-  socket_path: "/tmp/nodeagentx/plugin.sock"
+  runtime_path: "./rust-runtime/target/release/opsagent-rust-runtime"
+  socket_path: "/tmp/opsagent/plugin.sock"
   auto_start: true
   startup_timeout_seconds: 5
   request_timeout_seconds: 30
@@ -60,11 +60,11 @@ grpc:
 sandbox:
   enabled: false
   nsjail_path: "/usr/bin/nsjail"
-  base_workdir: "/tmp/nodeagentx/sandbox"
+  base_workdir: "/tmp/opsagent/sandbox"
   default_timeout_seconds: 30
   max_concurrent_tasks: 4
-  cgroup_base_path: "/sys/fs/cgroup/nodeagentx"
-  audit_log_path: "/var/log/nodeagentx/audit.log"
+  cgroup_base_path: "/sys/fs/cgroup/opsagent"
+  audit_log_path: "/var/log/opsagent/audit.log"
   policy:
     allowed_commands:
       - echo

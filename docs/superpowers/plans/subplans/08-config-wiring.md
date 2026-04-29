@@ -1,6 +1,6 @@
 # Sub-Plan 8: Config & Agent Wiring
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** Sub-Plans 1-7
 
 **Goal:** Extend configuration structs for gRPC, sandbox, and collector subsystems; wire all new components into the agent lifecycle; update config.yaml with new sections.
@@ -40,20 +40,20 @@ grpc:
   server_addr: "control.example.com:8443"
   enroll_token: "tok-abc123"
   mtls:
-    cert_file: "/etc/nodeagentx/certs/client.crt"
-    key_file: "/etc/nodeagentx/certs/client.key"
-    ca_file: "/etc/nodeagentx/certs/ca.crt"
+    cert_file: "/etc/opsagent/certs/client.crt"
+    key_file: "/etc/opsagent/certs/client.key"
+    ca_file: "/etc/opsagent/certs/ca.crt"
   heartbeat_interval_seconds: 15
   reconnect_initial_backoff_ms: 1000
   reconnect_max_backoff_ms: 30000
 sandbox:
   enabled: true
   nsjail_path: "/usr/bin/nsjail"
-  base_workdir: "/tmp/nodeagentx/sandbox"
+  base_workdir: "/tmp/opsagent/sandbox"
   default_timeout_seconds: 30
   max_concurrent_tasks: 4
-  cgroup_base_path: "/sys/fs/cgroup/nodeagentx"
-  audit_log_path: "/var/log/nodeagentx/audit.log"
+  cgroup_base_path: "/sys/fs/cgroup/opsagent"
+  audit_log_path: "/var/log/opsagent/audit.log"
   policy:
     allowed_commands: ["cat", "grep", "df", "free", "uptime", "ls", "wc", "tail", "head"]
     blocked_commands: ["rm -rf /", "dd if=", "mkfs", "shutdown", "reboot"]
@@ -105,7 +105,7 @@ collector:
 	if cfg.GRPC.EnrollToken != "tok-abc123" {
 		t.Fatalf("expected grpc enroll_token, got %s", cfg.GRPC.EnrollToken)
 	}
-	if cfg.GRPC.MTLS.CertFile != "/etc/nodeagentx/certs/client.crt" {
+	if cfg.GRPC.MTLS.CertFile != "/etc/opsagent/certs/client.crt" {
 		t.Fatalf("expected mtls cert_file")
 	}
 	if cfg.GRPC.HeartbeatIntervalSeconds != 15 {
@@ -348,9 +348,9 @@ grpc:
   server_addr: "control.example.com:8443"
   enroll_token: ""
   mtls:
-    cert_file: "/etc/nodeagentx/certs/client.crt"
-    key_file: "/etc/nodeagentx/certs/client.key"
-    ca_file: "/etc/nodeagentx/certs/ca.crt"
+    cert_file: "/etc/opsagent/certs/client.crt"
+    key_file: "/etc/opsagent/certs/client.key"
+    ca_file: "/etc/opsagent/certs/ca.crt"
   heartbeat_interval_seconds: 15
   reconnect_initial_backoff_ms: 1000
   reconnect_max_backoff_ms: 30000
@@ -358,11 +358,11 @@ grpc:
 sandbox:
   enabled: false
   nsjail_path: "/usr/bin/nsjail"
-  base_workdir: "/tmp/nodeagentx/sandbox"
+  base_workdir: "/tmp/opsagent/sandbox"
   default_timeout_seconds: 30
   max_concurrent_tasks: 4
-  cgroup_base_path: "/sys/fs/cgroup/nodeagentx"
-  audit_log_path: "/var/log/nodeagentx/audit.log"
+  cgroup_base_path: "/sys/fs/cgroup/opsagent"
+  audit_log_path: "/var/log/opsagent/audit.log"
   policy:
     allowed_commands:
       - cat
@@ -451,7 +451,7 @@ package app
 import (
 	"testing"
 
-	"nodeagentx/internal/config"
+	"opsagent/internal/config"
 )
 
 func TestNewAgentWiresCollectorPipeline(t *testing.T) {
@@ -508,20 +508,20 @@ Modify `internal/app/agent.go`. Add imports:
 ```go
 import (
 	// ... existing imports ...
-	"nodeagentx/internal/collector/aggregators/avg"
-	"nodeagentx/internal/collector/aggregators/sum"
-	"nodeagentx/internal/collector/inputs/cpu"
-	"nodeagentx/internal/collector/inputs/disk"
-	"nodeagentx/internal/collector/inputs/memory"
-	"nodeagentx/internal/collector/inputs/net"
-	"nodeagentx/internal/collector/inputs/process"
-	"nodeagentx/internal/collector/outputs/http"
-	"nodeagentx/internal/collector/outputs/prometheus"
-	"nodeagentx/internal/collector/outputs/promrw"
-	"nodeagentx/internal/collector/processors/regex"
-	"nodeagentx/internal/collector/processors/tagger"
-	"nodeagentx/internal/grpcclient"
-	"nodeagentx/internal/sandbox"
+	"opsagent/internal/collector/aggregators/avg"
+	"opsagent/internal/collector/aggregators/sum"
+	"opsagent/internal/collector/inputs/cpu"
+	"opsagent/internal/collector/inputs/disk"
+	"opsagent/internal/collector/inputs/memory"
+	"opsagent/internal/collector/inputs/net"
+	"opsagent/internal/collector/inputs/process"
+	"opsagent/internal/collector/outputs/http"
+	"opsagent/internal/collector/outputs/prometheus"
+	"opsagent/internal/collector/outputs/promrw"
+	"opsagent/internal/collector/processors/regex"
+	"opsagent/internal/collector/processors/tagger"
+	"opsagent/internal/grpcclient"
+	"opsagent/internal/sandbox"
 )
 ```
 
@@ -529,18 +529,18 @@ Note: These blank imports trigger `init()` registration. For plugins, use blank 
 
 ```go
 // Blank imports to trigger plugin init() registration
-_ "nodeagentx/internal/collector/inputs/cpu"
-_ "nodeagentx/internal/collector/inputs/memory"
-_ "nodeagentx/internal/collector/inputs/disk"
-_ "nodeagentx/internal/collector/inputs/net"
-_ "nodeagentx/internal/collector/inputs/process"
-_ "nodeagentx/internal/collector/outputs/http"
-_ "nodeagentx/internal/collector/outputs/prometheus"
-_ "nodeagentx/internal/collector/outputs/promrw"
-_ "nodeagentx/internal/collector/processors/regex"
-_ "nodeagentx/internal/collector/processors/tagger"
-_ "nodeagentx/internal/collector/aggregators/avg"
-_ "nodeagentx/internal/collector/aggregators/sum"
+_ "opsagent/internal/collector/inputs/cpu"
+_ "opsagent/internal/collector/inputs/memory"
+_ "opsagent/internal/collector/inputs/disk"
+_ "opsagent/internal/collector/inputs/net"
+_ "opsagent/internal/collector/inputs/process"
+_ "opsagent/internal/collector/outputs/http"
+_ "opsagent/internal/collector/outputs/prometheus"
+_ "opsagent/internal/collector/outputs/promrw"
+_ "opsagent/internal/collector/processors/regex"
+_ "opsagent/internal/collector/processors/tagger"
+_ "opsagent/internal/collector/aggregators/avg"
+_ "opsagent/internal/collector/aggregators/sum"
 ```
 
 Update `Agent` struct:

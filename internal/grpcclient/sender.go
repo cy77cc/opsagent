@@ -3,8 +3,8 @@ package grpcclient
 import (
 	"time"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
-	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
+	"github.com/cy77cc/opsagent/internal/collector"
+	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 )
 
 // ExecStats holds resource-usage statistics for an executed task.

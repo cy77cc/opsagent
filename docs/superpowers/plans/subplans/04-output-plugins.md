@@ -1,6 +1,6 @@
 # Sub-Plan 4: Output Plugins
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** [Sub-Plan 2: Collector Pipeline Core](02-collector-pipeline.md)
 
 **Goal:** Implement built-in Output plugins for metric delivery.
@@ -29,7 +29,7 @@ import (
 	"sync"
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestHTTPOutputWrite(t *testing.T) {
@@ -140,7 +140,7 @@ import (
 	"net/http"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func timeNow() time.Time { return time.Now() }
@@ -291,7 +291,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestPrometheusRender(t *testing.T) {
@@ -351,7 +351,7 @@ import (
 	"sync"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // PrometheusOutput serves metrics in Prometheus text exposition format.
@@ -482,7 +482,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestPromRWWrite(t *testing.T) {
@@ -553,7 +553,7 @@ import (
 	"net/http"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // PromRWOutput sends metrics via Prometheus Remote Write protocol.

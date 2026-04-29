@@ -1,7 +1,7 @@
 package tagger
 
 import (
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 // Condition defines a conditional tag addition rule.

@@ -110,7 +110,7 @@ fn parse_socket_path() -> String {
             }
         }
     }
-    "/tmp/nodeagentx/plugin.sock".to_string()
+    "/tmp/opsagent/plugin.sock".to_string()
 }
 
 fn handle_connection(mut stream: UnixStream) -> Result<(), String> {

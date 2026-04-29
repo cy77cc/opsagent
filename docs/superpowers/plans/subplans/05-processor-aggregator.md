@@ -1,6 +1,6 @@
 # Sub-Plan 5: Processor & Aggregator Plugins
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** [Sub-Plan 2: Collector Pipeline Core](02-collector-pipeline.md)
 
 **Goal:** Implement built-in Processor (regex, tagger) and Aggregator (avg, sum) plugins.
@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestRegexReplaceTag(t *testing.T) {
@@ -97,7 +97,7 @@ package regex
 import (
 	"regexp"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 type tagRule struct {
@@ -190,7 +190,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestTaggerAddStaticTag(t *testing.T) {
@@ -259,7 +259,7 @@ Create `internal/collector/processors/tagger/tagger.go`:
 ```go
 package tagger
 
-import "nodeagentx/internal/collector"
+import "opsagent/internal/collector"
 
 type condition struct {
 	tag      string
@@ -361,7 +361,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestAvgAggregator(t *testing.T) {
@@ -426,7 +426,7 @@ package avg
 import (
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // AvgAggregator computes the average of specified fields over a time window.
@@ -534,7 +534,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestSumAggregator(t *testing.T) {
@@ -580,7 +580,7 @@ package sum
 import (
 	"time"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // SumAggregator computes the sum of specified fields over a time window.

@@ -1,6 +1,6 @@
 # Sub-Plan 1: Proto & gRPC Foundation
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 
 **Goal:** Define the gRPC service contract in protobuf and generate Go code.
 
@@ -44,7 +44,7 @@ Expected: Both found in `$GOPATH/bin` or `$HOME/go/bin`.
 - [ ] **Step 1: Add dependencies to go.mod**
 
 ```bash
-cd /root/project/NodeAgentX
+cd /root/project/OpsAgent
 go get google.golang.org/grpc@latest
 go get google.golang.org/protobuf@latest
 go mod tidy
@@ -81,8 +81,8 @@ mkdir -p proto
 
 ```protobuf
 syntax = "proto3";
-package nodeagentx;
-option go_package = "nodeagentx/internal/grpcclient/proto";
+package opsagent;
+option go_package = "opsagent/internal/grpcclient/proto";
 
 // AgentService is the bidirectional streaming service between Agent and Platform.
 service AgentService {

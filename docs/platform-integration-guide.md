@@ -1,6 +1,6 @@
-# NodeAgentX Platform Integration Guide
+# OpsAgent Platform Integration Guide
 
-> 本文档面向平台侧开发者，说明如何部署 NodeAgentX Agent，以及如何在平台端编写 gRPC 服务来接收指标、下发命令。
+> 本文档面向平台侧开发者，说明如何部署 OpsAgent Agent，以及如何在平台端编写 gRPC 服务来接收指标、下发命令。
 
 ---
 
@@ -35,7 +35,7 @@
                             │ 双向流 (stream)
                             │
 ┌───────────────────────────┼───────────────────────────┐
-│                   NodeAgentX Agent                     │
+│                   OpsAgent Agent                     │
 │                           │                             │
 │   ┌───────────────────────┴───────────────────────┐   │
 │   │              gRPC Client                       │   │
@@ -88,20 +88,20 @@ VERSION=1.0.0 make package
 
 ```
 dist/
-├── nodeagentx-dev-linux-amd64.tar.gz
-├── nodeagentx-dev-linux-arm64.tar.gz
+├── opsagent-dev-linux-amd64.tar.gz
+├── opsagent-dev-linux-arm64.tar.gz
 ├── amd64/
-│   └── nodeagentx          # x86_64 二进制
+│   └── opsagent          # x86_64 二进制
 └── arm64/
-    └── nodeagentx-arm64    # arm64 二进制
+    └── opsagent-arm64    # arm64 二进制
 ```
 
 **安装**（在目标机器上执行）：
 
 ```bash
 # 解压
-tar xzf nodeagentx-<version>-linux-amd64.tar.gz
-cd nodeagentx-<version>-linux-amd64
+tar xzf opsagent-<version>-linux-amd64.tar.gz
+cd opsagent-<version>-linux-amd64
 
 # 一键安装（需要 root）
 sudo ./install.sh
@@ -111,53 +111,53 @@ sudo ./install.sh
 
 | 步骤 | 说明 |
 |------|------|
-| 安装二进制 | `/usr/local/bin/nodeagentx` |
-| 安装配置 | `/etc/nodeagentx/config.yaml`（已有则不覆盖，新配置存为 `.new`） |
-| 安装 systemd 服务 | `/etc/systemd/system/nodeagentx.service` |
-| 创建日志目录 | `/var/log/nodeagentx/` |
+| 安装二进制 | `/usr/local/bin/opsagent` |
+| 安装配置 | `/etc/opsagent/config.yaml`（已有则不覆盖，新配置存为 `.new`） |
+| 安装 systemd 服务 | `/etc/systemd/system/opsagent.service` |
+| 创建日志目录 | `/var/log/opsagent/` |
 
 安装完成后按提示操作：
 
 ```bash
 # 1. 编辑配置
-sudo vim /etc/nodeagentx/config.yaml
+sudo vim /etc/opsagent/config.yaml
 
 # 2. 启动服务
-sudo systemctl start nodeagentx
+sudo systemctl start opsagent
 
 # 3. 开机自启
-sudo systemctl enable nodeagentx
+sudo systemctl enable opsagent
 
 # 4. 查看状态
-sudo systemctl status nodeagentx
+sudo systemctl status opsagent
 
 # 5. 查看日志
-sudo journalctl -u nodeagentx -f
+sudo journalctl -u opsagent -f
 ```
 
 ### 2.3 方式二：源码编译
 
 ```bash
-git clone <repo-url> nodeagentx
-cd nodeagentx
+git clone <repo-url> opsagent
+cd opsagent
 
 # 编译当前架构
 make build
-# 产物: bin/nodeagentx
+# 产物: bin/opsagent
 
 # 交叉编译两个架构
 make build-all
-# 产物: bin/nodeagentx-amd64, bin/nodeagentx-arm64
+# 产物: bin/opsagent-amd64, bin/opsagent-arm64
 
 # 手动安装
-sudo cp bin/nodeagentx /usr/local/bin/nodeagentx
-sudo mkdir -p /etc/nodeagentx
-sudo cp configs/config.yaml /etc/nodeagentx/config.yaml
+sudo cp bin/opsagent /usr/local/bin/opsagent
+sudo mkdir -p /etc/opsagent
+sudo cp configs/config.yaml /etc/opsagent/config.yaml
 ```
 
 ### 2.4 配置
 
-配置文件路径：`/etc/nodeagentx/config.yaml`
+配置文件路径：`/etc/opsagent/config.yaml`
 
 **最小配置** (仅指标采集 + gRPC 连接):
 
@@ -186,9 +186,9 @@ grpc:
   server_addr: "platform.example.com:443"  # 平台 gRPC 地址
   enroll_token: "your-enrollment-token"     # 注册令牌
   mtls:
-    cert_file: "/etc/nodeagentx/certs/client.crt"
-    key_file: "/etc/nodeagentx/certs/client.key"
-    ca_file: "/etc/nodeagentx/certs/ca.crt"
+    cert_file: "/etc/opsagent/certs/client.crt"
+    key_file: "/etc/opsagent/certs/client.key"
+    ca_file: "/etc/opsagent/certs/ca.crt"
   heartbeat_interval_seconds: 15
   reconnect_initial_backoff_ms: 1000
   reconnect_max_backoff_ms: 30000
@@ -226,11 +226,11 @@ collector:
 sandbox:
   enabled: true
   nsjail_path: "/usr/bin/nsjail"
-  base_workdir: "/tmp/nodeagentx/sandbox"
+  base_workdir: "/tmp/opsagent/sandbox"
   default_timeout_seconds: 30
   max_concurrent_tasks: 4
-  cgroup_base_path: "/sys/fs/cgroup/nodeagentx"
-  audit_log_path: "/var/log/nodeagentx/audit.log"
+  cgroup_base_path: "/sys/fs/cgroup/opsagent"
+  audit_log_path: "/var/log/opsagent/audit.log"
   policy:
     allowed_commands:
       - echo
@@ -260,21 +260,21 @@ sandbox:
 
 ```bash
 # 启动 / 停止 / 重启
-sudo systemctl start nodeagentx
-sudo systemctl stop nodeagentx
-sudo systemctl restart nodeagentx
+sudo systemctl start opsagent
+sudo systemctl stop opsagent
+sudo systemctl restart opsagent
 
 # 查看状态
-sudo systemctl status nodeagentx
+sudo systemctl status opsagent
 
 # 开机自启 / 取消自启
-sudo systemctl enable nodeagentx
-sudo systemctl disable nodeagentx
+sudo systemctl enable opsagent
+sudo systemctl disable opsagent
 
 # 查看日志
-sudo journalctl -u nodeagentx -f           # 实时跟踪
-sudo journalctl -u nodeagentx --since today # 今日日志
-sudo journalctl -u nodeagentx -n 100        # 最近 100 行
+sudo journalctl -u opsagent -f           # 实时跟踪
+sudo journalctl -u opsagent --since today # 今日日志
+sudo journalctl -u opsagent -n 100        # 最近 100 行
 ```
 
 服务文件特性：
@@ -298,19 +298,19 @@ sudo ./uninstall.sh
 
 | 步骤 | 说明 |
 |------|------|
-| 停止服务 | `systemctl stop nodeagentx` |
-| 禁用自启 | `systemctl disable nodeagentx` |
-| 删除服务文件 | `/etc/systemd/system/nodeagentx.service` |
-| 删除二进制 | `/usr/local/bin/nodeagentx` |
-| 删除配置 | `/etc/nodeagentx/`（交互确认） |
-| 删除日志 | `/var/log/nodeagentx/`（交互确认） |
-| 删除临时目录 | `/tmp/nodeagentx/` |
+| 停止服务 | `systemctl stop opsagent` |
+| 禁用自启 | `systemctl disable opsagent` |
+| 删除服务文件 | `/etc/systemd/system/opsagent.service` |
+| 删除二进制 | `/usr/local/bin/opsagent` |
+| 删除配置 | `/etc/opsagent/`（交互确认） |
+| 删除日志 | `/var/log/opsagent/`（交互确认） |
+| 删除临时目录 | `/tmp/opsagent/` |
 
 ### 2.7 验证安装
 
 ```bash
 # 检查 binary
-nodeagentx --help
+opsagent --help
 
 # 检查 sandbox 前置条件（源码编译时）
 make sandbox-check
@@ -920,10 +920,10 @@ result, err := agentSrv.ExecuteScript(ctx, "agent-prod-001", &pb.ExecuteScript{
 nc -zv platform.example.com 443
 
 # 检查证书
-openssl x509 -in /etc/nodeagentx/certs/client.crt -noout -dates
+openssl x509 -in /etc/opsagent/certs/client.crt -noout -dates
 
 # 查看 Agent 日志 (开启 debug)
-LOG_LEVEL=debug ./bin/nodeagentx run --config /etc/nodeagentx/config.yaml
+LOG_LEVEL=debug ./bin/opsagent run --config /etc/opsagent/config.yaml
 ```
 
 ### 8.2 Sandbox 命令被拒绝
@@ -937,7 +937,7 @@ nsjail --version
 cat /sys/fs/cgroup/cgroup.controllers
 
 # 检查 Agent 日志中的 policy 错误
-journalctl -u nodeagentx | grep "policy"
+journalctl -u opsagent | grep "policy"
 ```
 
 ### 8.3 指标未到达平台

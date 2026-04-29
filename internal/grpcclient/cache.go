@@ -3,7 +3,7 @@ package grpcclient
 import (
 	"sync"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 // MetricCache is a fixed-size ring buffer that stores metrics.

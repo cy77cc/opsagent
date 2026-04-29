@@ -6,7 +6,7 @@ import (
 
 	gnet "github.com/shirou/gopsutil/v4/net"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 func init() {

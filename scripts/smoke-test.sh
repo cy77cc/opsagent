@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# smoke-test.sh — Quick smoke test for NodeAgentX.
+# smoke-test.sh — Quick smoke test for OpsAgent.
 # Runs: build, unit tests, vet, security scan, sandbox check, integration tests.
 set -euo pipefail
 
@@ -35,7 +35,7 @@ skip_step() {
 }
 
 # 1. Build
-run_step "Build" go build -o bin/nodeagentx ./cmd/agent
+run_step "Build" go build -o bin/opsagent ./cmd/agent
 
 # 2. Unit tests
 run_step "Unit Tests" go test ./... -race -count=1 -timeout 60s

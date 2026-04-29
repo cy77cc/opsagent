@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
-	"github.com/cy77cc/nodeagentx/internal/executor"
-	"github.com/cy77cc/nodeagentx/internal/task"
+	"github.com/cy77cc/opsagent/internal/collector"
+	"github.com/cy77cc/opsagent/internal/executor"
+	"github.com/cy77cc/opsagent/internal/task"
 	"github.com/rs/zerolog"
 )
 

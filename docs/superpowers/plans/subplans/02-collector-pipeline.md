@@ -1,6 +1,6 @@
 # Sub-Plan 2: Collector Pipeline Core
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** [Sub-Plan 1: Proto & gRPC Foundation](01-proto-grpc.md)
 
 **Goal:** Build the Telegraf-style collector pipeline with Metric model, Accumulator, Buffer, Scheduler, and plugin interfaces.
@@ -138,7 +138,7 @@ package collector
 import (
 	"time"
 
-	pb "nodeagentx/internal/grpcclient/proto"
+	pb "opsagent/internal/grpcclient/proto"
 )
 
 // MetricType represents the type of a metric.

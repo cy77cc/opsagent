@@ -1,4 +1,4 @@
-# NodeAgentX 全量设计文档
+# OpsAgent 全量设计文档
 
 > 日期: 2026-04-28
 > 状态: Draft
@@ -6,11 +6,11 @@
 
 ## 1. 愿景与背景
 
-NodeAgentX 定位为 OpsPilot 控制面的主机侧 Agent，对标 categraf/telegraf 的数据采集能力，同时提供安全沙箱环境供平台侧 AI Agent 远程执行命令和脚本。
+OpsAgent 定位为 OpsPilot 控制面的主机侧 Agent，对标 categraf/telegraf 的数据采集能力，同时提供安全沙箱环境供平台侧 AI Agent 远程执行命令和脚本。
 
 ### 核心问题
 
-AI Agent 在故障排查和运维方面能力强大，但直接通过 SSH 在主机上执行 shell 命令和脚本存在严重安全风险。NodeAgentX 通过主机侧沙箱执行引擎，让平台 AI Agent 安全地委托执行任务。
+AI Agent 在故障排查和运维方面能力强大，但直接通过 SSH 在主机上执行 shell 命令和脚本存在严重安全风险。OpsAgent 通过主机侧沙箱执行引擎，让平台 AI Agent 安全地委托执行任务。
 
 ### 两大子系统
 
@@ -39,7 +39,7 @@ AI Agent 在故障排查和运维方面能力强大，但直接通过 SSH 在主
 ┌──────────────────────────────┼─────────────────────────────────────┐
 │  Host (主机侧)               │                                     │
 │  ┌───────────────────────────▼──────────────────────────────────┐  │
-│  │                    NodeAgentX (Go)                            │  │
+│  │                    OpsAgent (Go)                            │  │
 │  │                                                               │  │
 │  │  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │  │
 │  │  │ gRPC Client  │  │  Collector   │  │   Sandbox Exec     │  │  │
@@ -256,7 +256,7 @@ type Buffer struct {
     │ gRPC ExecuteRequest
     ▼
 ┌───────────────────────────────────────────────────────┐
-│  NodeAgentX — Sandbox Executor Engine                  │
+│  OpsAgent — Sandbox Executor Engine                  │
 │                                                        │
 │  1. 接收任务 (command/script)                           │
 │  2. 安全策略校验 (白名单/黑名单/注入检测)               │
@@ -450,7 +450,7 @@ type NsjailConfig struct {
 
 ```protobuf
 syntax = "proto3";
-package nodeagentx;
+package opsagent;
 
 service AgentService {
     rpc Connect(stream AgentMessage) returns (stream PlatformMessage);
@@ -733,7 +733,7 @@ sandbox:
   max_timeout_seconds: 600
   default_network_mode: "none"
   max_output_bytes: 10485760  # 10MB
-  work_dir: "/tmp/nodeagentx-sandbox"
+  work_dir: "/tmp/opsagent-sandbox"
   bind_mounts:
     - {src: "/usr", dst: "/usr", readonly: true}
     - {src: "/lib", dst: "/lib", readonly: true}
@@ -769,7 +769,7 @@ agent:
 ## 7. 目录结构
 
 ```
-NodeAgentX/
+OpsAgent/
 ├── cmd/agent/                  # 入口 (不变)
 ├── configs/config.yaml
 ├── internal/

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# uninstall.sh — Uninstall NodeAgentX from the system.
+# uninstall.sh — Uninstall OpsAgent from the system.
 set -euo pipefail
 
-APP_NAME="nodeagentx"
+APP_NAME="opsagent"
 
 if [[ $EUID -ne 0 ]]; then
     echo "Error: This script must be run as root (use sudo)"
     exit 1
 fi
 
-echo "Uninstalling NodeAgentX..."
+echo "Uninstalling OpsAgent..."
 
 # Stop and disable service
 if systemctl is-active --quiet "${APP_NAME}" 2>/dev/null; then
@@ -64,7 +64,7 @@ if [[ -d /tmp/${APP_NAME} ]]; then
 fi
 
 echo ""
-echo "NodeAgentX uninstalled."
+echo "OpsAgent uninstalled."
 echo ""
 echo "  Remaining items to check:"
 echo "    - /etc/${APP_NAME}/config.yaml (if preserved)"

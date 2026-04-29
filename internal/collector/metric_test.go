@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
+	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 )
 
 func TestMetricNew(t *testing.T) {

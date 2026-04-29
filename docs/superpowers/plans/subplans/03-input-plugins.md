@@ -1,6 +1,6 @@
 # Sub-Plan 3: Input Plugins
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** [Sub-Plan 2: Collector Pipeline Core](02-collector-pipeline.md)
 
 **Goal:** Implement built-in Input plugins for host metrics collection using gopsutil.
@@ -27,7 +27,7 @@ import (
 	"context"
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestCPUGather(t *testing.T) {
@@ -108,7 +108,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/cpu"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // CPUInput collects CPU usage metrics via gopsutil.
@@ -200,7 +200,7 @@ import (
 	"context"
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestMemoryGather(t *testing.T) {
@@ -259,7 +259,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/mem"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // MemoryInput collects memory usage metrics via gopsutil.
@@ -331,7 +331,7 @@ import (
 	"context"
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestDiskGather(t *testing.T) {
@@ -389,7 +389,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/disk"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // DiskInput collects disk usage metrics for specified mount points.
@@ -490,7 +490,7 @@ import (
 	"context"
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestNetGather(t *testing.T) {
@@ -545,7 +545,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/net"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // NetInput collects network I/O metrics.
@@ -615,7 +615,7 @@ import (
 	"context"
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 func TestProcessGather(t *testing.T) {
@@ -672,7 +672,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/process"
 
-	"nodeagentx/internal/collector"
+	"opsagent/internal/collector"
 )
 
 // ProcessInput collects process-level metrics.

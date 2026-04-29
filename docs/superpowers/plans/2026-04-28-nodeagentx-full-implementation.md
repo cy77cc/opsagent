@@ -1,4 +1,4 @@
-# NodeAgentX Full Implementation Plan
+# OpsAgent Full Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.24, gRPC (google.golang.org/grpc), protobuf, nsjail (external binary), cgroup v2, gopsutil (existing), zerolog (existing), Viper (existing)
 
-**Spec:** `docs/superpowers/specs/2026-04-28-nodeagentx-full-design.md`
+**Spec:** `docs/superpowers/specs/2026-04-28-opsagent-full-design.md`
 
 ---
 

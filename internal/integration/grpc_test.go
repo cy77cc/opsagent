@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 
-	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
+	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 )
 
 const bufSize = 1024 * 1024

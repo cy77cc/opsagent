@@ -10,33 +10,33 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
-	"github.com/cy77cc/nodeagentx/internal/config"
-	"github.com/cy77cc/nodeagentx/internal/executor"
-	"github.com/cy77cc/nodeagentx/internal/grpcclient"
-	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
-	"github.com/cy77cc/nodeagentx/internal/logger"
-	"github.com/cy77cc/nodeagentx/internal/pluginruntime"
-	"github.com/cy77cc/nodeagentx/internal/reporter"
-	"github.com/cy77cc/nodeagentx/internal/sandbox"
-	"github.com/cy77cc/nodeagentx/internal/server"
-	"github.com/cy77cc/nodeagentx/internal/task"
+	"github.com/cy77cc/opsagent/internal/collector"
+	"github.com/cy77cc/opsagent/internal/config"
+	"github.com/cy77cc/opsagent/internal/executor"
+	"github.com/cy77cc/opsagent/internal/grpcclient"
+	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
+	"github.com/cy77cc/opsagent/internal/logger"
+	"github.com/cy77cc/opsagent/internal/pluginruntime"
+	"github.com/cy77cc/opsagent/internal/reporter"
+	"github.com/cy77cc/opsagent/internal/sandbox"
+	"github.com/cy77cc/opsagent/internal/server"
+	"github.com/cy77cc/opsagent/internal/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
 	// Blank imports to trigger init() plugin registration.
-	_ "github.com/cy77cc/nodeagentx/internal/collector/aggregators/avg"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/aggregators/sum"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/cpu"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/disk"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/memory"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/net"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/process"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/outputs/http"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/outputs/prometheus"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/outputs/promrw"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/processors/regex"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/processors/tagger"
+	_ "github.com/cy77cc/opsagent/internal/collector/aggregators/avg"
+	_ "github.com/cy77cc/opsagent/internal/collector/aggregators/sum"
+	_ "github.com/cy77cc/opsagent/internal/collector/inputs/cpu"
+	_ "github.com/cy77cc/opsagent/internal/collector/inputs/disk"
+	_ "github.com/cy77cc/opsagent/internal/collector/inputs/memory"
+	_ "github.com/cy77cc/opsagent/internal/collector/inputs/net"
+	_ "github.com/cy77cc/opsagent/internal/collector/inputs/process"
+	_ "github.com/cy77cc/opsagent/internal/collector/outputs/http"
+	_ "github.com/cy77cc/opsagent/internal/collector/outputs/prometheus"
+	_ "github.com/cy77cc/opsagent/internal/collector/outputs/promrw"
+	_ "github.com/cy77cc/opsagent/internal/collector/processors/regex"
+	_ "github.com/cy77cc/opsagent/internal/collector/processors/tagger"
 )
 
 // Agent wires collection, reporting, local API server, and task dispatch.
@@ -59,7 +59,7 @@ func NewRootCommand() *cobra.Command {
 	var configPath string
 
 	rootCmd := &cobra.Command{
-		Use:   "nodeagentx",
+		Use:   "opsagent",
 		Short: "Node metrics and remote exec agent",
 	}
 

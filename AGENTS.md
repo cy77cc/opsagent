@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-NodeAgentX 是 OpsPilot 平台的主机侧执行 Agent，当前阶段目标：指标采集、受限命令执行、AI 任务分发、可选鉴权、Prometheus 导出、Rust 插件 runtime。
+OpsAgent 是 OpsPilot 平台的主机侧执行 Agent，当前阶段目标：指标采集、受限命令执行、AI 任务分发、可选鉴权、Prometheus 导出、Rust 插件 runtime。
 
 ## 技术栈
 

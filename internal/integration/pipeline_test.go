@@ -8,12 +8,12 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 
 	// Blank imports to trigger plugin registration via init().
-	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/cpu"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/memory"
-	_ "github.com/cy77cc/nodeagentx/internal/collector/processors/tagger"
+	_ "github.com/cy77cc/opsagent/internal/collector/inputs/cpu"
+	_ "github.com/cy77cc/opsagent/internal/collector/inputs/memory"
+	_ "github.com/cy77cc/opsagent/internal/collector/processors/tagger"
 )
 
 // captureOutput implements collector.Output and stores all written metrics for testing.

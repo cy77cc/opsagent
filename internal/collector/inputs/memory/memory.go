@@ -6,7 +6,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/mem"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 func init() {

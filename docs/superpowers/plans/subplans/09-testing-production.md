@@ -1,6 +1,6 @@
 # Sub-Plan 9: Testing & Production Readiness
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** Sub-Plan 8
 
 **Goal:** Integration tests, full test suite verification, Makefile updates, security baseline, and production hardening.
@@ -30,11 +30,11 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodeagentx/internal/collector"
-	_ "nodeagentx/internal/collector/inputs/cpu"
-	_ "nodeagentx/internal/collector/inputs/memory"
-	_ "nodeagentx/internal/collector/outputs/http"
-	_ "nodeagentx/internal/collector/processors/tagger"
+	"opsagent/internal/collector"
+	_ "opsagent/internal/collector/inputs/cpu"
+	_ "opsagent/internal/collector/inputs/memory"
+	_ "opsagent/internal/collector/outputs/http"
+	_ "opsagent/internal/collector/processors/tagger"
 )
 
 func TestPipelineEndToEnd(t *testing.T) {
@@ -173,7 +173,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodeagentx/internal/sandbox"
+	"opsagent/internal/sandbox"
 )
 
 func TestSandboxExecutorBasic(t *testing.T) {
@@ -194,7 +194,7 @@ func TestSandboxExecutorBasic(t *testing.T) {
 		BaseWorkdir:        tmpDir,
 		DefaultTimeout:     10 * time.Second,
 		MaxConcurrentTasks: 2,
-		CgroupBasePath:     "/sys/fs/cgroup/nodeagentx-test",
+		CgroupBasePath:     "/sys/fs/cgroup/opsagent-test",
 		AuditLogPath:       tmpDir + "/audit.log",
 	}, sandbox.PolicyConfig{
 		AllowedCommands:     []string{"echo", "cat", "ls", "grep", "uname"},
@@ -275,7 +275,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	pb "nodeagentx/internal/grpcclient/proto"
+	pb "opsagent/internal/grpcclient/proto"
 )
 
 const bufSize = 1024 * 1024
@@ -379,8 +379,8 @@ git commit -m "test(integration): add gRPC client connection integration test"
 Replace the existing `Makefile` content:
 
 ```makefile
-APP_NAME=nodeagentx
-RUST_RUNTIME=nodeagentx-rust-runtime
+APP_NAME=opsagent
+RUST_RUNTIME=opsagent-rust-runtime
 
 .PHONY: tidy test test-race test-cover build run rust-build lint vet proto sandbox-check
 
@@ -544,7 +544,7 @@ Create `scripts/smoke-test.sh`:
 #!/bin/bash
 set -euo pipefail
 
-echo "=== NodeAgentX Smoke Test ==="
+echo "=== OpsAgent Smoke Test ==="
 
 # 1. Build
 echo "[1/6] Building..."

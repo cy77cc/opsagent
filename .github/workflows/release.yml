@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  APP_NAME: nodeagentx
+  APP_NAME: opsagent
 
 jobs:
   release:
@@ -24,7 +24,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.26.1'
 
       - name: Get version
         id: version
@@ -71,20 +71,20 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: NodeAgentX ${{ steps.version.outputs.tag }}
+          name: OpsAgent ${{ steps.version.outputs.tag }}
           body: |
-            ## NodeAgentX ${{ steps.version.outputs.tag }}
+            ## OpsAgent ${{ steps.version.outputs.tag }}
 
             ### Downloads
             | Architecture | Package |
             |---|---|
-            | x86_64 | `nodeagentx-${{ steps.version.outputs.tag }}-linux-amd64.tar.gz` |
-            | arm64 | `nodeagentx-${{ steps.version.outputs.tag }}-linux-arm64.tar.gz` |
+            | x86_64 | `opsagent-${{ steps.version.outputs.tag }}-linux-amd64.tar.gz` |
+            | arm64 | `opsagent-${{ steps.version.outputs.tag }}-linux-arm64.tar.gz` |
 
             ### Install
             ```bash
-            tar xzf nodeagentx-${{ steps.version.outputs.tag }}-linux-amd64.tar.gz
-            cd nodeagentx-${{ steps.version.outputs.tag }}-linux-amd64
+            tar xzf opsagent-${{ steps.version.outputs.tag }}-linux-amd64.tar.gz
+            cd opsagent-${{ steps.version.outputs.tag }}-linux-amd64
             sudo ./install.sh
             ```
 

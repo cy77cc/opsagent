@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/opsagent/internal/collector"
 )
 
 func makeMetric(name string) *collector.Metric {

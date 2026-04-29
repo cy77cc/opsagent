@@ -1,6 +1,6 @@
 # Sub-Plan 7: Sandbox Executor
 
-> **Parent:** [NodeAgentX Full Implementation Plan](../2026-04-28-nodeagentx-full-implementation.md)
+> **Parent:** [OpsAgent Full Implementation Plan](../2026-04-28-opsagent-full-implementation.md)
 > **Depends on:** [Sub-Plan 1: Proto & gRPC Foundation](01-proto-grpc.md)
 
 **Goal:** Implement the nsjail-based sandbox execution engine with security policy, output streaming, cgroup stats, audit logging, and network isolation.
@@ -437,7 +437,7 @@ func interpreterToPath(interpreter string) string {
 func (c *NsjailConfig) WriteConfigFile(taskID string) (string, error) {
 	workDir := c.WorkDir
 	if workDir == "" {
-		workDir = "/tmp/nodeagentx-sandbox"
+		workDir = "/tmp/opsagent-sandbox"
 	}
 
 	if err := os.MkdirAll(workDir, 0755); err != nil {
@@ -1021,7 +1021,7 @@ func TestExecutorRunCommand(t *testing.T) {
 	log := zerolog.Nop()
 	executor := NewExecutor(Config{
 		NsjailPath:  "nsjail",
-		WorkDir:     "/tmp/nodeagentx-sandbox-test",
+		WorkDir:     "/tmp/opsagent-sandbox-test",
 		MemoryMB:    256,
 		CPUPercent:  50,
 		MaxPIDs:     16,
@@ -1199,7 +1199,7 @@ func NewExecutor(cfg Config, logger zerolog.Logger) *Executor {
 		cfg.NetworkMode = "none"
 	}
 	if cfg.WorkDir == "" {
-		cfg.WorkDir = "/tmp/nodeagentx-sandbox"
+		cfg.WorkDir = "/tmp/opsagent-sandbox"
 	}
 
 	return &Executor{
