@@ -111,3 +111,31 @@ func (s *Server) getLatestMetric() *collector.MetricPayload {
 	defer s.mu.RUnlock()
 	return s.latestMetric
 }
+
+// UpdateAuth atomically updates the auth configuration.
+func (s *Server) UpdateAuth(cfg AuthConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.options.Auth = cfg
+}
+
+// UpdatePrometheus atomically updates the Prometheus configuration.
+func (s *Server) UpdatePrometheus(cfg PrometheusConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.options.Prometheus = cfg
+}
+
+// GetAuth returns the current auth config snapshot.
+func (s *Server) GetAuth() AuthConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.options.Auth
+}
+
+// GetPrometheus returns the current prometheus config snapshot.
+func (s *Server) GetPrometheus() PrometheusConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.options.Prometheus
+}
