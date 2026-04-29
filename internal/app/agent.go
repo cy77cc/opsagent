@@ -105,6 +105,31 @@ func NewRootCommand() *cobra.Command {
 			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
 
+			// SIGHUP handler for config reload.
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGHUP)
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case sig := <-sigCh:
+						if sig == syscall.SIGHUP {
+							yaml, readErr := os.ReadFile(configPath)
+							if readErr != nil {
+								log.Error().Err(readErr).Msg("failed to read config file for SIGHUP reload")
+								continue
+							}
+							if applyErr := agent.ConfigReloader().Apply(ctx, yaml); applyErr != nil {
+								log.Error().Err(applyErr).Msg("SIGHUP config reload failed")
+							} else {
+								log.Info().Msg("config reloaded via SIGHUP")
+							}
+						}
+					}
+				}
+			}()
+
 			return agent.Run(ctx)
 		},
 	}
