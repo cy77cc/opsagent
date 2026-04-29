@@ -14,6 +14,7 @@ import (
 type GRPCClient interface {
 	Start(ctx context.Context) error
 	Stop()
+	FlushAndStop(ctx context.Context, persistPath string) error
 	SendMetrics(metrics []*collector.Metric)
 	SendExecOutput(taskID, streamName string, data []byte)
 	SendExecResult(result *grpcclient.ExecResult)
@@ -32,7 +33,6 @@ type HTTPServer interface {
 // on configured intervals.
 type Scheduler interface {
 	Start(ctx context.Context) <-chan []*collector.Metric
-	Reload(ctx context.Context, cfg collector.ReloadConfig) error
 	Stop()
 }
 
