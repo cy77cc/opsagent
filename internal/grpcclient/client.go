@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -417,4 +418,81 @@ func (c *Client) setConnected(v bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.connected = v
+}
+
+// FlushAndStop drains the cache, sends all metrics, and closes the connection.
+// If sending fails and persistPath is non-empty, remaining metrics are written to disk.
+func (c *Client) FlushAndStop(ctx context.Context, persistPath string) error {
+	// Cancel the connection loop.
+	if c.cancel != nil {
+		c.cancel()
+	}
+
+	metrics := c.cache.Drain()
+	if len(metrics) > 0 {
+		c.mu.Lock()
+		stream := c.stream
+		c.mu.Unlock()
+
+		if stream != nil {
+			// Send in batches of 100.
+			batchSize := 100
+			for i := 0; i < len(metrics); i += batchSize {
+				end := i + batchSize
+				if end > len(metrics) {
+					end = len(metrics)
+				}
+				batch := metrics[i:end]
+				msg := NewMetricBatchMessage(batch)
+				if err := stream.Send(msg); err != nil {
+					c.logger.Warn().Err(err).Msg("flush send failed, will persist remaining")
+					metrics = metrics[i:] // remaining
+					goto persist
+				}
+			}
+			metrics = nil // all sent
+		}
+
+	persist:
+		if len(metrics) > 0 && persistPath != "" {
+			data, err := json.Marshal(metrics)
+			if err != nil {
+				c.logger.Error().Err(err).Msg("failed to marshal metrics for persistence")
+			} else {
+				if err := os.WriteFile(persistPath, data, 0644); err != nil {
+					c.logger.Error().Err(err).Str("path", persistPath).Msg("failed to persist cache")
+				} else {
+					c.logger.Info().Int("count", len(metrics)).Str("path", persistPath).Msg("cache persisted to disk")
+				}
+			}
+		} else if len(metrics) > 0 {
+			c.logger.Warn().Int("count", len(metrics)).Msg("cache not persisted (no persist path configured)")
+		}
+	}
+
+	// Close connection.
+	c.closeConn()
+
+	// Wait for goroutines.
+	c.wg.Wait()
+	return nil
+}
+
+// loadPersistedCache loads metrics from a JSON file into the cache and removes the file.
+func (c *Client) loadPersistedCache(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return // file doesn't exist or read error, ignore
+	}
+	var metrics []*collector.Metric
+	if err := json.Unmarshal(data, &metrics); err != nil {
+		c.logger.Warn().Err(err).Msg("failed to parse persisted cache, discarding")
+		os.Remove(path)
+		return
+	}
+	for _, m := range metrics {
+		c.cache.Add(m)
+	}
+	os.Remove(path)
+	c.logger.Info().Int("count", len(metrics)).Msg("loaded persisted cache")
 }

@@ -2,8 +2,10 @@ package grpcclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -304,4 +306,54 @@ func TestClientStartStop(t *testing.T) {
 	// Cancel context and stop — should not hang or panic.
 	cancel()
 	c.Stop()
+}
+
+func TestFlushAndStop_PersistsOnStreamUnavailable(t *testing.T) {
+	c := NewClient(Config{CacheMaxSize: 100}, zerolog.Nop(), nil)
+	// Add metrics to cache without starting connection.
+	for i := 0; i < 5; i++ {
+		c.cache.Add(collector.NewMetric("test", nil, map[string]interface{}{"v": float64(i)}, collector.Gauge, time.Now()))
+	}
+
+	tmpFile := t.TempDir() + "/cache.json"
+	err := c.FlushAndStop(context.Background(), tmpFile)
+	if err != nil {
+		t.Fatalf("FlushAndStop failed: %v", err)
+	}
+
+	// Verify persisted file exists and has metrics.
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read persisted cache: %v", err)
+	}
+	var metrics []*collector.Metric
+	if err := json.Unmarshal(data, &metrics); err != nil {
+		t.Fatalf("failed to unmarshal persisted cache: %v", err)
+	}
+	if len(metrics) != 5 {
+		t.Errorf("persisted %d metrics, want 5", len(metrics))
+	}
+}
+
+func TestLoadPersistedCache(t *testing.T) {
+	c := NewClient(Config{CacheMaxSize: 100}, zerolog.Nop(), nil)
+
+	// Create a persisted cache file.
+	metrics := []*collector.Metric{
+		collector.NewMetric("test", nil, map[string]interface{}{"v": 1.0}, collector.Gauge, time.Now()),
+	}
+	data, _ := json.Marshal(metrics)
+	tmpFile := t.TempDir() + "/cache.json"
+	os.WriteFile(tmpFile, data, 0644)
+
+	c.loadPersistedCache(tmpFile)
+
+	if c.cache.Len() != 1 {
+		t.Errorf("cache len = %d, want 1", c.cache.Len())
+	}
+
+	// File should be removed after loading.
+	if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
+		t.Error("persisted cache file should be removed after loading")
+	}
 }
