@@ -1,5 +1,7 @@
 package app
 
+import "github.com/cy77cc/opsagent/internal/config"
+
 // Option configures an Agent.
 type Option func(*Agent)
 
@@ -21,4 +23,9 @@ func WithScheduler(s Scheduler) Option {
 // WithPluginRuntime injects a custom PluginRuntime (for testing).
 func WithPluginRuntime(r PluginRuntime) Option {
 	return func(a *Agent) { a.pluginRuntime = r }
+}
+
+// WithConfigReloader injects a custom ConfigReloader (for testing).
+func WithConfigReloader(r *config.ConfigReloader) Option {
+	return func(a *Agent) { a.configReloader = r }
 }

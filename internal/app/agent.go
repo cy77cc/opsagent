@@ -18,6 +18,7 @@ import (
 	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 	"github.com/cy77cc/opsagent/internal/logger"
 	"github.com/cy77cc/opsagent/internal/pluginruntime"
+	"github.com/cy77cc/opsagent/internal/reporter"
 	"github.com/cy77cc/opsagent/internal/sandbox"
 	"github.com/cy77cc/opsagent/internal/server"
 	"github.com/cy77cc/opsagent/internal/task"
@@ -44,17 +45,23 @@ var Version = "dev"
 
 // Agent wires collection, local API server, and task dispatch.
 type Agent struct {
-	cfg           *config.Config
-	log           zerolog.Logger
-	server        HTTPServer
-	executor      *executor.Executor
-	pluginRuntime PluginRuntime
-	scheduler     Scheduler
-	grpcClient    GRPCClient
-	sandboxExec   *sandbox.Executor
-	startedAt     time.Time
-	activeTasks   sync.Map
-	shuttingDown  atomic.Bool
+	cfg            *config.Config
+	log            zerolog.Logger
+	server         HTTPServer
+	executor       *executor.Executor
+	pluginRuntime  PluginRuntime
+	scheduler      Scheduler
+	grpcClient     GRPCClient
+	sandboxExec    *sandbox.Executor
+	configReloader *config.ConfigReloader
+	startedAt      time.Time
+	activeTasks    sync.Map
+	shuttingDown   atomic.Bool
+}
+
+// ConfigReloader returns the agent's config reloader.
+func (a *Agent) ConfigReloader() *config.ConfigReloader {
+	return a.configReloader
 }
 
 // NewRootCommand creates the CLI entrypoint.
@@ -97,6 +104,31 @@ func NewRootCommand() *cobra.Command {
 
 			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
+
+			// SIGHUP handler for config reload.
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGHUP)
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case sig := <-sigCh:
+						if sig == syscall.SIGHUP {
+							yaml, readErr := os.ReadFile(configPath)
+							if readErr != nil {
+								log.Error().Err(readErr).Msg("failed to read config file for SIGHUP reload")
+								continue
+							}
+							if applyErr := agent.ConfigReloader().Apply(ctx, yaml); applyErr != nil {
+								log.Error().Err(applyErr).Msg("SIGHUP config reload failed")
+							} else {
+								log.Info().Msg("config reloaded via SIGHUP")
+							}
+						}
+					}
+				}
+			}()
 
 			return agent.Run(ctx)
 		},
@@ -215,6 +247,21 @@ func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, e
 	if grpcRecv != nil {
 		a.registerGRPCHandlers(grpcRecv)
 	}
+
+	// Build config reloader if not injected.
+	if a.configReloader == nil {
+		var reloaders []config.Reloader
+		if sched, ok := a.scheduler.(*collector.Scheduler); ok {
+			reloaders = append(reloaders, collector.NewCollectorReloader(sched, log))
+		}
+		if srv, ok := a.server.(*server.Server); ok {
+			reloaders = append(reloaders, server.NewAuthReloader(srv))
+			reloaders = append(reloaders, server.NewPrometheusReloader(srv))
+		}
+		reloaders = append(reloaders, reporter.NewReporterReloader(log))
+		a.configReloader = config.NewConfigReloader(cfg, log, reloaders...)
+	}
+
 	return a, nil
 }
 
@@ -678,10 +725,20 @@ func (a *Agent) registerGRPCHandlers(recv *grpcclient.Receiver) {
 		return nil
 	})
 
-	// Config update handler: ack.
-	recv.SetConfigUpdateHandler(func(_ context.Context, update *pb.ConfigUpdate) error {
-		a.log.Info().Int64("version", update.GetVersion()).Msg("config update received (ack)")
-		a.grpcClient.SendExecResult(&grpcclient.ExecResult{TaskID: "config-update"})
+	// Config update handler: apply hot-reload via ConfigReloader.
+	recv.SetConfigUpdateHandler(func(ctx context.Context, update *pb.ConfigUpdate) error {
+		if err := a.configReloader.Apply(ctx, update.GetConfigYaml()); err != nil {
+			a.log.Error().Err(err).Int64("version", update.GetVersion()).Msg("config reload failed")
+			a.grpcClient.SendExecResult(&grpcclient.ExecResult{
+				TaskID:   fmt.Sprintf("config-update-%d", update.GetVersion()),
+				ExitCode: -1,
+			})
+			return nil
+		}
+		a.log.Info().Int64("version", update.GetVersion()).Msg("config reloaded")
+		a.grpcClient.SendExecResult(&grpcclient.ExecResult{
+			TaskID: fmt.Sprintf("config-update-%d", update.GetVersion()),
+		})
 		return nil
 	})
 }

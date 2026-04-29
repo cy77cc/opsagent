@@ -125,6 +125,39 @@ func TestSchedulerStop(t *testing.T) {
 	}
 }
 
+func TestSchedulerReload(t *testing.T) {
+	input1 := newTestInput("cpu", nil, map[string]interface{}{"v": 1.0})
+	si := ScheduledInput{Input: input1, Interval: 50 * time.Millisecond}
+
+	sched := NewScheduler([]ScheduledInput{si}, nil, nil, nil, zerolog.Nop())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := sched.Start(ctx)
+
+	// Wait for at least one gather
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for initial metrics")
+	}
+
+	// Reload with empty config — should stop all inputs
+	err := sched.Reload(ctx, ReloadConfig{})
+	if err != nil {
+		t.Fatalf("Reload failed: %v", err)
+	}
+
+	// Wait a bit then stop
+	time.Sleep(100 * time.Millisecond)
+	sched.Stop()
+
+	_, ok := <-ch
+	if ok {
+		t.Error("channel should be closed after reload with empty config and stop")
+	}
+}
+
 func TestSchedulerAppliesStaticTags(t *testing.T) {
 	input := newTestInput("cpu", map[string]string{"host": "s1"}, map[string]interface{}{"v": 1.0})
 

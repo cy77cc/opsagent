@@ -2,6 +2,7 @@ agent:
   id: "agent-local-001"
   name: "local-dev-agent"
   interval_seconds: 10
+  shutdown_timeout_seconds: 30
 
 server:
   listen_addr: "0.0.0.0:18080"
@@ -56,6 +57,7 @@ grpc:
   heartbeat_interval_seconds: 15
   reconnect_initial_backoff_ms: 1000
   reconnect_max_backoff_ms: 30000
+  cache_persist_path: ""
 
 sandbox:
   enabled: false

@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -10,6 +11,21 @@ import (
 
 // defaultAccumulatorSize is the default buffer capacity for per-gather accumulators.
 const defaultAccumulatorSize = 1000
+
+// ReloadConfig is the collector pipeline config snapshot, converted from config.CollectorConfig
+// by CollectorReloader to avoid circular imports.
+type ReloadConfig struct {
+	Inputs      []PluginConfig
+	Processors  []PluginConfig
+	Aggregators []PluginConfig
+	Outputs     []PluginConfig
+}
+
+// PluginConfig is a single plugin instance config.
+type PluginConfig struct {
+	Type   string
+	Config map[string]interface{}
+}
 
 // ScheduledInput pairs an Input with its collection interval and static tags.
 type ScheduledInput struct {
@@ -21,19 +37,29 @@ type ScheduledInput struct {
 // Scheduler runs multiple inputs on their own intervals and sends
 // collected metric batches to a shared output channel.
 type Scheduler struct {
-	inputs        []ScheduledInput
-	processors    []Processor
-	aggregators   []Aggregator
-	outputs       []Output
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	logger        zerolog.Logger
-	accSize       int
-	startOnce     sync.Once
+	inputs      []ScheduledInput
+	processors  []Processor
+	aggregators []Aggregator
+	outputs     []Output
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	logger      zerolog.Logger
+	accSize     int
+	running     bool
+	mu          sync.Mutex
+	interval    time.Duration
+	outCh       chan []*Metric
 }
+
+// defaultSchedulerInterval is the fallback collection interval when no inputs are configured.
+const defaultSchedulerInterval = 10 * time.Second
 
 // NewScheduler creates a Scheduler for the given inputs, processors, aggregators, and outputs.
 func NewScheduler(inputs []ScheduledInput, processors []Processor, aggregators []Aggregator, outputs []Output, logger zerolog.Logger) *Scheduler {
+	interval := defaultSchedulerInterval
+	if len(inputs) > 0 && inputs[0].Interval > 0 {
+		interval = inputs[0].Interval
+	}
 	return &Scheduler{
 		inputs:      inputs,
 		processors:  processors,
@@ -41,39 +67,143 @@ func NewScheduler(inputs []ScheduledInput, processors []Processor, aggregators [
 		outputs:     outputs,
 		logger:      logger,
 		accSize:     defaultAccumulatorSize,
+		interval:    interval,
 	}
 }
 
 // Start begins collection goroutines for each input. It returns a channel
 // that receives batches of metrics. The channel is closed when Stop is called.
 func (s *Scheduler) Start(ctx context.Context) <-chan []*Metric {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	ch := make(chan []*Metric, len(s.inputs))
-	s.startOnce.Do(func() {
-		ctx, s.cancel = context.WithCancel(ctx)
-		for _, si := range s.inputs {
-			s.wg.Add(1)
-			go s.runInput(ctx, si, ch)
-		}
-		// Periodically push aggregators.
-		if len(s.aggregators) > 0 {
-			s.wg.Add(1)
-			go s.runAggregatorPush(ctx)
-		}
-		// Close channel when all goroutines are done.
-		go func() {
-			s.wg.Wait()
-			close(ch)
-		}()
-	})
+	s.outCh = ch
+	ctx, s.cancel = context.WithCancel(ctx)
+	s.running = true
+
+	for _, si := range s.inputs {
+		s.wg.Add(1)
+		go s.runInput(ctx, si, ch)
+	}
+	// Periodically push aggregators.
+	if len(s.aggregators) > 0 {
+		s.wg.Add(1)
+		go s.runAggregatorPush(ctx)
+	}
+	// Close channel when all goroutines are done.
+	go func() {
+		s.wg.Wait()
+		close(ch)
+	}()
+
 	return ch
 }
 
 // Stop cancels all input goroutines and waits for them to finish.
 func (s *Scheduler) Stop() {
+	s.mu.Lock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	s.running = false
+	s.mu.Unlock()
+	s.wg.Wait()
+}
+
+// Reload stops all current inputs, rebuilds the pipeline from cfg, and restarts.
+func (s *Scheduler) Reload(ctx context.Context, cfg ReloadConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Stop current goroutines.
 	if s.cancel != nil {
 		s.cancel()
 	}
 	s.wg.Wait()
+
+	// Push aggregator results before teardown.
+	if len(s.aggregators) > 0 {
+		acc := NewAccumulator(defaultAccumulatorSize)
+		for _, agg := range s.aggregators {
+			agg.Push(acc)
+			agg.Reset()
+		}
+	}
+
+	// Rebuild pipeline.
+	var scheduledInputs []ScheduledInput
+	for _, inCfg := range cfg.Inputs {
+		factory, ok := DefaultRegistry.GetInput(inCfg.Type)
+		if !ok {
+			return fmt.Errorf("unknown input type: %q", inCfg.Type)
+		}
+		input := factory()
+		if err := input.Init(inCfg.Config); err != nil {
+			return fmt.Errorf("init input %q: %w", inCfg.Type, err)
+		}
+		scheduledInputs = append(scheduledInputs, ScheduledInput{Input: input, Interval: s.interval})
+	}
+
+	var processors []Processor
+	for _, pCfg := range cfg.Processors {
+		factory, ok := DefaultRegistry.GetProcessor(pCfg.Type)
+		if !ok {
+			return fmt.Errorf("unknown processor type: %q", pCfg.Type)
+		}
+		p := factory()
+		if err := p.Init(pCfg.Config); err != nil {
+			return fmt.Errorf("init processor %q: %w", pCfg.Type, err)
+		}
+		processors = append(processors, p)
+	}
+
+	var aggregators []Aggregator
+	for _, aCfg := range cfg.Aggregators {
+		factory, ok := DefaultRegistry.GetAggregator(aCfg.Type)
+		if !ok {
+			return fmt.Errorf("unknown aggregator type: %q", aCfg.Type)
+		}
+		agg := factory()
+		if err := agg.Init(aCfg.Config); err != nil {
+			return fmt.Errorf("init aggregator %q: %w", aCfg.Type, err)
+		}
+		aggregators = append(aggregators, agg)
+	}
+
+	var outputs []Output
+	for _, oCfg := range cfg.Outputs {
+		factory, ok := DefaultRegistry.GetOutput(oCfg.Type)
+		if !ok {
+			return fmt.Errorf("unknown output type: %q", oCfg.Type)
+		}
+		out := factory()
+		if err := out.Init(oCfg.Config); err != nil {
+			return fmt.Errorf("init output %q: %w", oCfg.Type, err)
+		}
+		outputs = append(outputs, out)
+	}
+
+	// Replace fields.
+	s.inputs = scheduledInputs
+	s.processors = processors
+	s.aggregators = aggregators
+	s.outputs = outputs
+
+	// Restart goroutines if previously running.
+	if s.running {
+		ctx, s.cancel = context.WithCancel(ctx)
+		for _, si := range s.inputs {
+			s.wg.Add(1)
+			go s.runInput(ctx, si, s.outCh)
+		}
+		if len(s.aggregators) > 0 {
+			s.wg.Add(1)
+			go s.runAggregatorPush(ctx)
+		}
+	}
+
+	return nil
 }
 
 func (s *Scheduler) runInput(ctx context.Context, si ScheduledInput, ch chan<- []*Metric) {
