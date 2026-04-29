@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -53,6 +54,7 @@ type Agent struct {
 	sandboxExec   *sandbox.Executor
 	startedAt     time.Time
 	activeTasks   sync.Map
+	shuttingDown  atomic.Bool
 }
 
 // NewRootCommand creates the CLI entrypoint.
@@ -334,23 +336,62 @@ func (a *Agent) eventLoop(ctx context.Context, pipelineCh <-chan []*collector.Me
 	}
 }
 
-// shutdown gracefully tears down all subsystems in reverse start order.
-func (a *Agent) shutdown() {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := a.server.Shutdown(shutdownCtx); err != nil {
-		a.log.Error().Err(err).Msg("failed to shutdown server")
+// waitForActiveTasks blocks until all active tasks complete or the context is cancelled.
+func (a *Agent) waitForActiveTasks(ctx context.Context) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			a.activeTasks.Range(func(key, value any) bool {
+				value.(context.CancelFunc)()
+				return true
+			})
+			return
+		case <-ticker.C:
+			remaining := 0
+			a.activeTasks.Range(func(_, _ any) bool { remaining++; return true })
+			if remaining == 0 {
+				return
+			}
+		}
 	}
-	a.grpcClient.Stop()
+}
+
+// shutdown gracefully tears down all subsystems in the ordered steps:
+// 1. Mark as shutting down (reject new tasks).
+// 2. Wait for active tasks to complete.
+// 3. Stop scheduler.
+// 4. Flush gRPC cache.
+// 5. Stop plugin runtime.
+// 6. Shutdown HTTP server.
+func (a *Agent) shutdown(ctx context.Context) {
+	// 1. Mark as shutting down.
+	a.shuttingDown.Store(true)
+
+	// 2. Wait for active tasks.
+	a.waitForActiveTasks(ctx)
+
+	// 3. Stop scheduler.
 	if a.scheduler != nil {
 		a.scheduler.Stop()
 	}
 
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 4. Flush gRPC cache.
+	if err := a.grpcClient.FlushAndStop(ctx, a.cfg.GRPC.CachePersistPath); err != nil {
+		a.log.Error().Err(err).Msg("failed to flush gRPC client")
+	}
+
+	// 5. Stop plugin runtime.
+	stopCtx, stopCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer stopCancel()
 	if err := a.pluginRuntime.Stop(stopCtx); err != nil {
 		a.log.Error().Err(err).Msg("failed to stop plugin runtime")
+	}
+
+	// 6. Shutdown HTTP server.
+	if err := a.server.Shutdown(ctx); err != nil {
+		a.log.Error().Err(err).Msg("failed to shutdown server")
 	}
 }
 
@@ -360,8 +401,15 @@ func (a *Agent) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer a.shutdown()
 	a.eventLoop(ctx, pipelineCh, errCh)
+
+	timeout := time.Duration(a.cfg.Agent.ShutdownTimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	a.shutdown(shutdownCtx)
 	return nil
 }
 
@@ -381,6 +429,10 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 	})
 
 	dispatcher.Register(task.TypeExecCommand, func(ctx context.Context, t task.AgentTask) (any, error) {
+		if a.shuttingDown.Load() {
+			return nil, fmt.Errorf("agent is shutting down")
+		}
+
 		taskCtx, cancel := context.WithCancel(ctx)
 		a.activeTasks.Store(t.TaskID, cancel)
 		defer a.activeTasks.Delete(t.TaskID)
@@ -453,6 +505,10 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 
 	// Sandbox exec task handler.
 	dispatcher.Register(task.TypeSandboxExec, func(ctx context.Context, t task.AgentTask) (any, error) {
+		if a.shuttingDown.Load() {
+			return nil, fmt.Errorf("agent is shutting down")
+		}
+
 		taskCtx, cancel := context.WithCancel(ctx)
 		a.activeTasks.Store(t.TaskID, cancel)
 		defer a.activeTasks.Delete(t.TaskID)
@@ -518,6 +574,10 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 func (a *Agent) registerGRPCHandlers(recv *grpcclient.Receiver) {
 	// Command handler: execute via sandbox when available, otherwise via local executor.
 	recv.SetCommandHandler(func(ctx context.Context, cmd *pb.ExecuteCommand) error {
+		if a.shuttingDown.Load() {
+			return fmt.Errorf("agent is shutting down")
+		}
+
 		if a.sandboxExec != nil {
 			result, err := a.sandboxExec.ExecuteCommand(ctx, sandbox.ExecRequest{
 				TaskID:  cmd.GetTaskId(),
@@ -569,6 +629,10 @@ func (a *Agent) registerGRPCHandlers(recv *grpcclient.Receiver) {
 
 	// Script handler: execute via sandbox when available.
 	recv.SetScriptHandler(func(ctx context.Context, script *pb.ExecuteScript) error {
+		if a.shuttingDown.Load() {
+			return fmt.Errorf("agent is shutting down")
+		}
+
 		if a.sandboxExec == nil {
 			a.log.Warn().Str("task_id", script.GetTaskId()).Msg("sandbox disabled, cannot execute script")
 			a.grpcClient.SendExecResult(&grpcclient.ExecResult{

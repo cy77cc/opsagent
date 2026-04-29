@@ -23,9 +23,10 @@ type Config struct {
 
 // AgentConfig controls agent identity and collection cadence.
 type AgentConfig struct {
-	ID              string `mapstructure:"id"`
-	Name            string `mapstructure:"name"`
-	IntervalSeconds int    `mapstructure:"interval_seconds"`
+	ID                     string `mapstructure:"id"`
+	Name                   string `mapstructure:"name"`
+	IntervalSeconds        int    `mapstructure:"interval_seconds"`
+	ShutdownTimeoutSeconds int    `mapstructure:"shutdown_timeout_seconds"`
 }
 
 // ServerConfig controls local API server settings.
@@ -84,6 +85,7 @@ type GRPCConfig struct {
 	HeartbeatIntervalSeconds  int        `mapstructure:"heartbeat_interval_seconds"`
 	ReconnectInitialBackoffMS int        `mapstructure:"reconnect_initial_backoff_ms"`
 	ReconnectMaxBackoffMS     int        `mapstructure:"reconnect_max_backoff_ms"`
+	CachePersistPath          string     `mapstructure:"cache_persist_path"`
 }
 
 // MTLSConfig holds mutual TLS certificate paths.

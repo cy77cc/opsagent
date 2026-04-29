@@ -56,6 +56,11 @@ func (m *mockGRPCClient) SendExecOutput(string, string, []byte)     {}
 func (m *mockGRPCClient) SendExecResult(*grpcclient.ExecResult)     {}
 func (m *mockGRPCClient) IsConnected() bool                         { return true }
 
+func (m *mockGRPCClient) FlushAndStop(_ context.Context, _ string) error {
+	m.stopCalled.Add(1)
+	return nil
+}
+
 // mockHTTPServer implements HTTPServer for testing.
 //
 // Start blocks until Shutdown is called, mirroring the real server
@@ -330,5 +335,69 @@ func TestAgentRun_StartSubsystemFailure(t *testing.T) {
 	}
 	if got := httpServer.startCalled.Load(); got != 0 {
 		t.Errorf("httpServer.Start called %d times, want 0", got)
+	}
+}
+
+func TestAgentShutdown_RejectsNewTasks(t *testing.T) {
+	agent := &Agent{
+		cfg:       minimalConfig(),
+		log:       zerolog.Nop(),
+		startedAt: time.Now().UTC(),
+	}
+	agent.shuttingDown.Store(true)
+
+	if !agent.shuttingDown.Load() {
+		t.Error("expected shuttingDown to be true")
+	}
+}
+
+func TestAgentShutdown_WaitsForActiveTasks(t *testing.T) {
+	agent := &Agent{
+		cfg:       minimalConfig(),
+		log:       zerolog.Nop(),
+		startedAt: time.Now().UTC(),
+	}
+
+	_, taskCancel := context.WithCancel(context.Background())
+	agent.activeTasks.Store("task-1", taskCancel)
+
+	done := make(chan struct{})
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		agent.activeTasks.Delete("task-1")
+		taskCancel()
+		close(done)
+	}()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	agent.waitForActiveTasks(shutdownCtx)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("waitForActiveTasks did not return after task completed")
+	}
+}
+
+func TestAgentShutdown_ForceCancelsOnTimeout(t *testing.T) {
+	agent := &Agent{
+		cfg:       minimalConfig(),
+		log:       zerolog.Nop(),
+		startedAt: time.Now().UTC(),
+	}
+
+	taskCtx, taskCancel := context.WithCancel(context.Background())
+	defer taskCancel()
+	agent.activeTasks.Store("task-1", taskCancel)
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	agent.waitForActiveTasks(shutdownCtx)
+
+	select {
+	case <-taskCtx.Done():
+	default:
+		t.Error("expected task context to be cancelled on timeout")
 	}
 }

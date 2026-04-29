@@ -418,3 +418,70 @@ func (c *Client) setConnected(v bool) {
 	defer c.mu.Unlock()
 	c.connected = v
 }
+
+// FlushAndStop drains the cache, sends all metrics, and closes the connection.
+// If persistPath is non-empty and sending fails, remaining metrics are persisted to disk.
+func (c *Client) FlushAndStop(ctx context.Context, persistPath string) error {
+	// Stop the connection loop first.
+	if c.cancel != nil {
+		c.cancel()
+	}
+	c.wg.Wait()
+
+	// Drain cache.
+	metrics := c.cache.Drain()
+	if len(metrics) == 0 {
+		c.closeConn()
+		return nil
+	}
+
+	// Try to send remaining metrics.
+	c.mu.Lock()
+	stream := c.stream
+	connected := c.connected
+	c.mu.Unlock()
+
+	var unsent []*collector.Metric
+	if connected && stream != nil {
+		msg := NewMetricBatchMessage(metrics)
+		if err := stream.Send(msg); err != nil {
+			c.logger.Warn().Err(err).Msg("flush send failed, will persist remaining")
+			unsent = metrics
+		}
+	} else {
+		unsent = metrics
+	}
+
+	// Persist unsent metrics if a path is provided.
+	if len(unsent) > 0 && persistPath != "" {
+		if err := persistMetrics(unsent, persistPath); err != nil {
+			c.logger.Error().Err(err).Msg("failed to persist metrics")
+		} else {
+			c.logger.Info().Int("count", len(unsent)).Str("path", persistPath).Msg("persisted unsent metrics")
+		}
+	}
+
+	c.closeConn()
+	return nil
+}
+
+// loadPersistedCache loads previously persisted metrics from disk into the cache.
+func (c *Client) loadPersistedCache(persistPath string) {
+	if persistPath == "" {
+		return
+	}
+	metrics, err := loadMetrics(persistPath)
+	if err != nil {
+		c.logger.Warn().Err(err).Msg("failed to load persisted cache")
+		return
+	}
+	if len(metrics) == 0 {
+		return
+	}
+	c.logger.Info().Int("count", len(metrics)).Str("path", persistPath).Msg("loaded persisted metrics into cache")
+	for _, m := range metrics {
+		c.cache.Add(m)
+	}
+	// Remove the file after loading.
+	os.Remove(persistPath)
+}

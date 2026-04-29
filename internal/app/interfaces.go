@@ -14,6 +14,7 @@ import (
 type GRPCClient interface {
 	Start(ctx context.Context) error
 	Stop()
+	FlushAndStop(ctx context.Context, persistPath string) error
 	SendMetrics(metrics []*collector.Metric)
 	SendExecOutput(taskID, streamName string, data []byte)
 	SendExecResult(result *grpcclient.ExecResult)
