@@ -59,7 +59,7 @@ func NewRootCommand() *cobra.Command {
 	var configPath string
 
 	rootCmd := &cobra.Command{
-		Use:   "github.com/cy77cc/nodeagentx",
+		Use:   "nodeagentx",
 		Short: "Node metrics and remote exec agent",
 	}
 
