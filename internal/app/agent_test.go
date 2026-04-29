@@ -401,3 +401,25 @@ func TestAgentShutdown_ForceCancelsOnTimeout(t *testing.T) {
 		t.Error("expected task context to be cancelled on timeout")
 	}
 }
+
+func TestAgentConfigReload_Integration(t *testing.T) {
+	grpcClient := newMockGRPCClient()
+	httpServer := newMockHTTPServer()
+	scheduler := newMockScheduler()
+	pluginRuntime := newMockPluginRuntime()
+
+	agent, err := NewAgent(minimalConfig(), zerolog.Nop(),
+		WithGRPCClient(grpcClient),
+		WithServer(httpServer),
+		WithScheduler(scheduler),
+		WithPluginRuntime(pluginRuntime),
+	)
+	if err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+
+	// Test that ConfigReloader is accessible.
+	if agent.ConfigReloader() == nil {
+		t.Fatal("ConfigReloader should not be nil")
+	}
+}
