@@ -32,6 +32,7 @@ type HTTPServer interface {
 // on configured intervals.
 type Scheduler interface {
 	Start(ctx context.Context) <-chan []*collector.Metric
+	Reload(ctx context.Context, cfg collector.ReloadConfig) error
 	Stop()
 }
 

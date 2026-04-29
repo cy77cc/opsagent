@@ -110,6 +110,7 @@ func (m *mockScheduler) Start(_ context.Context) <-chan []*collector.Metric {
 	return m.ch
 }
 
+func (m *mockScheduler) Reload(_ context.Context, _ collector.ReloadConfig) error { return nil }
 func (m *mockScheduler) Stop() { m.stopCalled.Add(1) }
 
 // mockPluginRuntime implements PluginRuntime for testing.
