@@ -356,3 +356,203 @@ func TestValidateSandboxValidConfig(t *testing.T) {
 		t.Fatalf("expected no error for valid sandbox config, got: %v", err)
 	}
 }
+
+// --- Boundary value tests ---
+
+func TestValidateBoundaryAgentID(t *testing.T) {
+	tests := []struct {
+		name    string
+		id      string
+		wantErr bool
+	}{
+		{"empty", "", true},
+		{"single char", "a", false},
+		{"very long 300 chars", strings.Repeat("x", 300), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Agent.ID = tt.id
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("id length=%d, wantErr=%v, got err=%v", len(tt.id), tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateBoundaryAgentIntervalSeconds(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+	}{
+		{"negative", -1, true},
+		{"zero", 0, true},
+		{"one (lower bound)", 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Agent.IntervalSeconds = tt.value
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("interval_seconds=%d, wantErr=%v, got err=%v", tt.value, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateBoundaryExecutorTimeoutSeconds(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+	}{
+		{"negative", -1, true},
+		{"zero", 0, true},
+		{"one (lower bound)", 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Executor.TimeoutSeconds = tt.value
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("timeout_seconds=%d, wantErr=%v, got err=%v", tt.value, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateBoundaryExecutorMaxOutputBytes(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+	}{
+		{"negative", -1, true},
+		{"zero", 0, true},
+		{"one (lower bound)", 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Executor.MaxOutputBytes = tt.value
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("max_output_bytes=%d, wantErr=%v, got err=%v", tt.value, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateBoundaryReporterMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		mode    string
+		wantErr bool
+	}{
+		{"empty", "", true},
+		{"invalid value", "file", true},
+		{"stdout", "stdout", false},
+		{"http", "http", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Reporter.Mode = tt.mode
+			if tt.mode == "http" {
+				cfg.Reporter.Endpoint = "http://example.com/report"
+			}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("mode=%q, wantErr=%v, got err=%v", tt.mode, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateBoundaryReporterHTTPEndpointEmpty(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Reporter.Mode = "http"
+	cfg.Reporter.Endpoint = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for http mode with empty endpoint")
+	}
+}
+
+func TestValidateBoundaryReporterStdoutEndpointNotRequired(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Reporter.Mode = "stdout"
+	cfg.Reporter.Endpoint = ""
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for stdout mode with empty endpoint, got: %v", err)
+	}
+}
+
+func TestValidateBoundaryReporterTimeoutSeconds(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+	}{
+		{"negative", -1, true},
+		{"zero", 0, true},
+		{"one (lower bound)", 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Reporter.TimeoutSeconds = tt.value
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("timeout_seconds=%d, wantErr=%v, got err=%v", tt.value, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateBoundaryReporterRetryCount(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+	}{
+		{"negative", -1, true},
+		{"zero (lower bound)", 0, false},
+		{"positive", 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Reporter.RetryCount = tt.value
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("retry_count=%d, wantErr=%v, got err=%v", tt.value, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateBoundaryReporterRetryIntervalMS(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+	}{
+		{"negative", -1, true},
+		{"zero (lower bound)", 0, false},
+		{"positive", 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Reporter.RetryIntervalMS = tt.value
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("retry_interval_ms=%d, wantErr=%v, got err=%v", tt.value, tt.wantErr, err)
+			}
+		})
+	}
+}
