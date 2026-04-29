@@ -1,10 +1,51 @@
 package grpcclient
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/metadata"
+
+	"github.com/cy77cc/opsagent/internal/collector"
+	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 )
+
+// mockConnectStream implements grpc.BidiStreamingClient[pb.AgentMessage, pb.PlatformMessage]
+// for testing purposes.
+type mockConnectStream struct {
+	sendFn    func(*pb.AgentMessage) error
+	recvFn    func() (*pb.PlatformMessage, error)
+	sendCount atomic.Int32
+	recvCount atomic.Int32
+}
+
+func (m *mockConnectStream) Send(msg *pb.AgentMessage) error {
+	m.sendCount.Add(1)
+	if m.sendFn != nil {
+		return m.sendFn(msg)
+	}
+	return nil
+}
+
+func (m *mockConnectStream) Recv() (*pb.PlatformMessage, error) {
+	m.recvCount.Add(1)
+	if m.recvFn != nil {
+		return m.recvFn()
+	}
+	return nil, io.EOF
+}
+
+func (m *mockConnectStream) Header() (metadata.MD, error)  { return nil, nil }
+func (m *mockConnectStream) Trailer() metadata.MD           { return nil }
+func (m *mockConnectStream) CloseSend() error               { return nil }
+func (m *mockConnectStream) Context() context.Context       { return context.Background() }
+func (m *mockConnectStream) SendMsg(interface{}) error      { return nil }
+func (m *mockConnectStream) RecvMsg(interface{}) error      { return nil }
 
 func TestClientDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
@@ -141,4 +182,126 @@ func TestBuildTLSCredentials_InvalidCertPath(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for nonexistent cert files")
 	}
+}
+
+func TestClientSendMetrics_CachesWhenDisconnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	m := collector.NewMetric("test", nil, map[string]interface{}{"v": 1.0}, collector.Gauge, time.Now())
+	c.SendMetrics([]*collector.Metric{m})
+
+	if got := c.cache.Len(); got != 1 {
+		t.Errorf("expected cache length 1, got %d", got)
+	}
+}
+
+func TestClientSendMetrics_EmptySlice(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	// nil slice — should not panic
+	c.SendMetrics(nil)
+	if got := c.cache.Len(); got != 0 {
+		t.Errorf("expected cache length 0 after nil send, got %d", got)
+	}
+
+	// empty slice — should not panic
+	c.SendMetrics([]*collector.Metric{})
+	if got := c.cache.Len(); got != 0 {
+		t.Errorf("expected cache length 0 after empty send, got %d", got)
+	}
+}
+
+func TestClientReplayCache_Empty(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	// replayCache with empty cache and nil stream should not panic.
+	c.replayCache()
+}
+
+func TestClientReplayCache_SendsBatch(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	// Add metrics to cache.
+	for i := 0; i < 5; i++ {
+		m := collector.NewMetric(
+			fmt.Sprintf("metric_%d", i),
+			nil,
+			map[string]interface{}{"v": float64(i)},
+			collector.Gauge,
+			time.Now(),
+		)
+		c.cache.Add(m)
+	}
+
+	mock := &mockConnectStream{}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	c.replayCache()
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+	if got := c.cache.Len(); got != 0 {
+		t.Errorf("expected cache drained (len=0), got %d", got)
+	}
+}
+
+func TestClientReplayCache_SendFailureRecaches(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	// Add metrics to cache.
+	for i := 0; i < 3; i++ {
+		m := collector.NewMetric(
+			fmt.Sprintf("metric_%d", i),
+			nil,
+			map[string]interface{}{"v": float64(i)},
+			collector.Gauge,
+			time.Now(),
+		)
+		c.cache.Add(m)
+	}
+
+	mock := &mockConnectStream{
+		sendFn: func(*pb.AgentMessage) error {
+			return fmt.Errorf("send failed")
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	c.replayCache()
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+	// Metrics should be re-cached after failure.
+	if got := c.cache.Len(); got != 3 {
+		t.Errorf("expected 3 metrics re-cached, got %d", got)
+	}
+}
+
+func TestClientStop_Idempotent(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	// Calling Stop twice without Start should not panic.
+	c.Stop()
+	c.Stop()
+}
+
+func TestClientStartStop(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("unexpected error from Start: %v", err)
+	}
+
+	// Cancel context and stop — should not hang or panic.
+	cancel()
+	c.Stop()
 }
