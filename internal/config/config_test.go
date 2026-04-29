@@ -357,6 +357,25 @@ func TestValidateSandboxValidConfig(t *testing.T) {
 	}
 }
 
+func TestConfig_ShutdownTimeoutSeconds(t *testing.T) {
+	c := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10, ShutdownTimeoutSeconds: 45},
+		Server:   ServerConfig{ListenAddr: ":0"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000, CachePersistPath: "/tmp/cache.json"},
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.Agent.ShutdownTimeoutSeconds != 45 {
+		t.Errorf("ShutdownTimeoutSeconds = %d, want 45", c.Agent.ShutdownTimeoutSeconds)
+	}
+	if c.GRPC.CachePersistPath != "/tmp/cache.json" {
+		t.Errorf("CachePersistPath = %q, want %q", c.GRPC.CachePersistPath, "/tmp/cache.json")
+	}
+}
+
 // --- Boundary value tests ---
 
 func TestValidateBoundaryAgentID(t *testing.T) {

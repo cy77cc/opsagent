@@ -23,9 +23,10 @@ type Config struct {
 
 // AgentConfig controls agent identity and collection cadence.
 type AgentConfig struct {
-	ID              string `mapstructure:"id"`
-	Name            string `mapstructure:"name"`
-	IntervalSeconds int    `mapstructure:"interval_seconds"`
+	ID                     string `mapstructure:"id"`
+	Name                   string `mapstructure:"name"`
+	IntervalSeconds        int    `mapstructure:"interval_seconds"`
+	ShutdownTimeoutSeconds int    `mapstructure:"shutdown_timeout_seconds"`
 }
 
 // ServerConfig controls local API server settings.
@@ -84,6 +85,7 @@ type GRPCConfig struct {
 	HeartbeatIntervalSeconds  int        `mapstructure:"heartbeat_interval_seconds"`
 	ReconnectInitialBackoffMS int        `mapstructure:"reconnect_initial_backoff_ms"`
 	ReconnectMaxBackoffMS     int        `mapstructure:"reconnect_max_backoff_ms"`
+	CachePersistPath          string     `mapstructure:"cache_persist_path"`
 }
 
 // MTLSConfig holds mutual TLS certificate paths.
@@ -136,6 +138,7 @@ func Load(path string) (*Config, error) {
 	v.SetConfigType("yaml")
 
 	v.SetDefault("agent.interval_seconds", 10)
+	v.SetDefault("agent.shutdown_timeout_seconds", 30)
 	v.SetDefault("server.listen_addr", "0.0.0.0:18080")
 	v.SetDefault("executor.timeout_seconds", 10)
 	v.SetDefault("executor.max_output_bytes", 65536)
@@ -160,6 +163,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("grpc.heartbeat_interval_seconds", 15)
 	v.SetDefault("grpc.reconnect_initial_backoff_ms", 1000)
 	v.SetDefault("grpc.reconnect_max_backoff_ms", 30000)
+	v.SetDefault("grpc.cache_persist_path", "")
 	v.SetDefault("sandbox.enabled", false)
 	v.SetDefault("sandbox.default_timeout_seconds", 30)
 	v.SetDefault("sandbox.max_concurrent_tasks", 4)
