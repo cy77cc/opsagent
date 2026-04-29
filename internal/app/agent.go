@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -18,7 +17,6 @@ import (
 	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 	"github.com/cy77cc/opsagent/internal/logger"
 	"github.com/cy77cc/opsagent/internal/pluginruntime"
-	"github.com/cy77cc/opsagent/internal/reporter"
 	"github.com/cy77cc/opsagent/internal/sandbox"
 	"github.com/cy77cc/opsagent/internal/server"
 	"github.com/cy77cc/opsagent/internal/task"
@@ -43,12 +41,10 @@ import (
 // Version is set at build time via ldflags.
 var Version = "dev"
 
-// Agent wires collection, reporting, local API server, and task dispatch.
+// Agent wires collection, local API server, and task dispatch.
 type Agent struct {
 	cfg           *config.Config
 	log           zerolog.Logger
-	manager       *collector.Manager
-	reporter      reporter.Reporter
 	server        HTTPServer
 	executor      *executor.Executor
 	pluginRuntime PluginRuntime
@@ -122,23 +118,12 @@ func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, e
 		opt(a)
 	}
 
-	// Build collector manager (always concrete).
-	hostCollector := collector.NewHostCollector(cfg.Agent.ID, cfg.Agent.Name, a.startedAt)
-	a.manager = collector.NewManager([]collector.Collector{hostCollector})
-
 	// Build executor (always concrete).
 	a.executor = executor.New(
 		cfg.Executor.AllowedCommands,
 		time.Duration(cfg.Executor.TimeoutSeconds)*time.Second,
 		cfg.Executor.MaxOutputBytes,
 	)
-
-	// Build reporter (always concrete).
-	rep, err := newReporter(cfg, log)
-	if err != nil {
-		return nil, err
-	}
-	a.reporter = rep
 
 	// Build plugin runtime if not injected.
 	if a.pluginRuntime == nil {
@@ -300,90 +285,84 @@ func buildScheduler(cfg *config.Config, log zerolog.Logger) (*collector.Schedule
 	return collector.NewScheduler(scheduledInputs, processors, aggregators, outputs, log), nil
 }
 
-func newReporter(cfg *config.Config, log zerolog.Logger) (reporter.Reporter, error) {
-	switch cfg.Reporter.Mode {
-	case "stdout":
-		return reporter.NewStdoutReporter(log), nil
-	case "http":
-		return reporter.NewHTTPReporter(
-			log,
-			cfg.Reporter.Endpoint,
-			time.Duration(cfg.Reporter.TimeoutSeconds)*time.Second,
-			cfg.Reporter.RetryCount,
-			time.Duration(cfg.Reporter.RetryIntervalMS)*time.Millisecond,
-		), nil
-	default:
-		return nil, fmt.Errorf("unsupported reporter mode: %s", cfg.Reporter.Mode)
-	}
-}
-
-// Run starts runtime, HTTP server and collection loop.
-func (a *Agent) Run(ctx context.Context) error {
+// startSubsystems initialises and starts all agent subsystems. It returns the
+// collector pipeline channel and an error channel for the HTTP server.
+func (a *Agent) startSubsystems(ctx context.Context) (<-chan []*collector.Metric, chan error, error) {
 	a.log.Info().Str("agent_id", a.cfg.Agent.ID).Str("listen_addr", a.cfg.Server.ListenAddr).Msg("agent starting")
 
 	if err := a.pluginRuntime.Start(ctx); err != nil {
-		return fmt.Errorf("start plugin runtime: %w", err)
+		return nil, nil, fmt.Errorf("start plugin runtime: %w", err)
 	}
-	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := a.pluginRuntime.Stop(stopCtx); err != nil {
-			a.log.Error().Err(err).Msg("failed to stop plugin runtime")
-		}
-	}()
 
-	// Start the collector pipeline scheduler if configured.
 	var pipelineCh <-chan []*collector.Metric
 	if a.scheduler != nil {
 		pipelineCh = a.scheduler.Start(ctx)
-		defer a.scheduler.Stop()
 		a.log.Info().Msg("collector pipeline scheduler started")
 	}
 
-	// Start the gRPC client.
 	if err := a.grpcClient.Start(ctx); err != nil {
-		return fmt.Errorf("start grpc client: %w", err)
+		return nil, nil, fmt.Errorf("start grpc client: %w", err)
 	}
-	defer a.grpcClient.Stop()
 
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- a.server.Start()
 	}()
 
-	if err := a.collectAndReport(ctx); err != nil {
-		a.log.Error().Err(err).Msg("initial collect failed")
-	}
+	return pipelineCh, errCh, nil
+}
 
-	ticker := time.NewTicker(time.Duration(a.cfg.Agent.IntervalSeconds) * time.Second)
-	defer ticker.Stop()
-
+// eventLoop blocks until the context is cancelled, the HTTP server exits, or
+// the pipeline channel is closed.
+func (a *Agent) eventLoop(ctx context.Context, pipelineCh <-chan []*collector.Metric, errCh chan error) {
 	for {
 		select {
 		case <-ctx.Done():
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := a.server.Shutdown(shutdownCtx); err != nil {
-				return fmt.Errorf("shutdown server: %w", err)
-			}
-			return nil
+			return
 		case err := <-errCh:
 			if err != nil {
-				return fmt.Errorf("http server stopped: %w", err)
+				a.log.Error().Err(err).Msg("http server stopped with error")
 			}
-			return nil
+			return
 		case metrics, ok := <-pipelineCh:
 			if !ok {
 				pipelineCh = nil
 				continue
 			}
 			a.handlePipelineMetrics(metrics)
-		case <-ticker.C:
-			if err := a.collectAndReport(ctx); err != nil {
-				a.log.Error().Err(err).Msg("collect loop failed")
-			}
 		}
 	}
+}
+
+// shutdown gracefully tears down all subsystems in reverse start order.
+func (a *Agent) shutdown() {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := a.server.Shutdown(shutdownCtx); err != nil {
+		a.log.Error().Err(err).Msg("failed to shutdown server")
+	}
+	a.grpcClient.Stop()
+	if a.scheduler != nil {
+		a.scheduler.Stop()
+	}
+
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stopCancel()
+	if err := a.pluginRuntime.Stop(stopCtx); err != nil {
+		a.log.Error().Err(err).Msg("failed to stop plugin runtime")
+	}
+}
+
+// Run starts all subsystems, enters the event loop, and shuts down on exit.
+func (a *Agent) Run(ctx context.Context) error {
+	pipelineCh, errCh, err := a.startSubsystems(ctx)
+	if err != nil {
+		return err
+	}
+	defer a.shutdown()
+	a.eventLoop(ctx, pipelineCh, errCh)
+	return nil
 }
 
 // handlePipelineMetrics processes metrics from the collector pipeline.
@@ -396,41 +375,9 @@ func (a *Agent) handlePipelineMetrics(metrics []*collector.Metric) {
 	a.log.Debug().Int("count", len(metrics)).Msg("pipeline metrics sent via gRPC")
 }
 
-func (a *Agent) collectAndReport(ctx context.Context) error {
-	metrics, err := a.manager.CollectAll(ctx)
-	if err != nil {
-		a.log.Error().Err(err).Msg("collector returned errors")
-	}
-	if len(metrics) == 0 {
-		if err != nil {
-			return err
-		}
-		return errors.New("collector returned no payload")
-	}
-
-	// Report all collected metric payloads.
-	for _, mp := range metrics {
-		if reportErr := a.reporter.Report(ctx, mp); reportErr != nil {
-			a.log.Error().Err(reportErr).Str("collector", mp.Collector).Msg("reporter failed")
-			return reportErr
-		}
-	}
-	// Update the server with the latest payload.
-	a.server.SetLatestMetric(metrics[len(metrics)-1])
-	return err
-}
-
 func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
-	dispatcher.Register(task.TypeCollectMetrics, func(ctx context.Context, _ task.AgentTask) (any, error) {
-		metrics, err := a.manager.CollectAll(ctx)
-		if err != nil && len(metrics) == 0 {
-			return nil, err
-		}
-		if len(metrics) == 0 {
-			return nil, errors.New("no metric payload")
-		}
-		a.server.SetLatestMetric(metrics[len(metrics)-1])
-		return metrics, err
+	dispatcher.Register(task.TypeCollectMetrics, func(_ context.Context, _ task.AgentTask) (any, error) {
+		return nil, fmt.Errorf("legacy collect-metrics path removed")
 	})
 
 	dispatcher.Register(task.TypeExecCommand, func(ctx context.Context, t task.AgentTask) (any, error) {
