@@ -1,6 +1,6 @@
 module github.com/cy77cc/nodeagentx
 
-go 1.24.0
+go 1.26.1
 
 require (
 	github.com/rs/zerolog v1.33.0
