@@ -179,9 +179,9 @@ func TestAgentRun_StartsAndStopsAllSubsystems(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- agent.Run(ctx) }()
 
-	// Wait for the last synchronous subsystem start (grpcClient.Start).
+	// Wait for all subsystems to start (server.Start is async, so wait for it too).
 	select {
-	case <-grpcClient.started:
+	case <-httpServer.started:
 	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for subsystems to start")
 	}
