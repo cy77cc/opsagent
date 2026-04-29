@@ -24,6 +24,8 @@ type GRPCClient interface {
 type HTTPServer interface {
 	Start() error
 	Shutdown(ctx context.Context) error
+	SetLatestMetric(metric *collector.MetricPayload)
+	LatestMetricExists() bool
 }
 
 // Scheduler abstracts the collector pipeline scheduler that runs inputs
@@ -37,6 +39,7 @@ type Scheduler interface {
 type PluginRuntime interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
+	ExecuteTask(ctx context.Context, req pluginruntime.TaskRequest) (*pluginruntime.TaskResponse, error)
 }
 
 // Compile-time interface satisfaction checks.

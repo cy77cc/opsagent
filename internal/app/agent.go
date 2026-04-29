@@ -49,11 +49,11 @@ type Agent struct {
 	log           zerolog.Logger
 	manager       *collector.Manager
 	reporter      reporter.Reporter
-	server        *server.Server
+	server        HTTPServer
 	executor      *executor.Executor
-	pluginRuntime *pluginruntime.Runtime
-	scheduler     *collector.Scheduler
-	grpcClient    *grpcclient.Client
+	pluginRuntime PluginRuntime
+	scheduler     Scheduler
+	grpcClient    GRPCClient
 	sandboxExec   *sandbox.Executor
 	startedAt     time.Time
 	activeTasks   sync.Map
@@ -109,60 +109,82 @@ func NewRootCommand() *cobra.Command {
 	return rootCmd
 }
 
-// NewAgent builds the runtime agent.
-func NewAgent(cfg *config.Config, log zerolog.Logger) (*Agent, error) {
-	startedAt := time.Now().UTC()
-	hostCollector := collector.NewHostCollector(cfg.Agent.ID, cfg.Agent.Name, startedAt)
-	manager := collector.NewManager([]collector.Collector{hostCollector})
+// NewAgent builds the runtime agent. Options allow injecting custom
+// implementations of HTTPServer, PluginRuntime, Scheduler, and GRPCClient
+// (primarily for testing).
+func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, error) {
+	a := &Agent{
+		cfg:       cfg,
+		log:       log,
+		startedAt: time.Now().UTC(),
+	}
+	for _, opt := range opts {
+		opt(a)
+	}
 
-	exec := executor.New(
+	// Build collector manager (always concrete).
+	hostCollector := collector.NewHostCollector(cfg.Agent.ID, cfg.Agent.Name, a.startedAt)
+	a.manager = collector.NewManager([]collector.Collector{hostCollector})
+
+	// Build executor (always concrete).
+	a.executor = executor.New(
 		cfg.Executor.AllowedCommands,
 		time.Duration(cfg.Executor.TimeoutSeconds)*time.Second,
 		cfg.Executor.MaxOutputBytes,
 	)
 
+	// Build reporter (always concrete).
 	rep, err := newReporter(cfg, log)
 	if err != nil {
 		return nil, err
 	}
+	a.reporter = rep
 
-	pr := pluginruntime.New(pluginruntime.Config{
-		Enabled:            cfg.Plugin.Enabled,
-		RuntimePath:        cfg.Plugin.RuntimePath,
-		SocketPath:         cfg.Plugin.SocketPath,
-		AutoStart:          cfg.Plugin.AutoStart,
-		StartupTimeout:     time.Duration(cfg.Plugin.StartupTimeoutSeconds) * time.Second,
-		RequestTimeout:     time.Duration(cfg.Plugin.RequestTimeoutSeconds) * time.Second,
-		MaxConcurrentTasks: cfg.Plugin.MaxConcurrentTasks,
-		MaxResultBytes:     cfg.Plugin.MaxResultBytes,
-		ChunkSizeBytes:     cfg.Plugin.ChunkSizeBytes,
-		SandboxProfile:     cfg.Plugin.SandboxProfile,
-	}, log)
-
-	// Build collector pipeline from config.
-	sched, err := buildScheduler(cfg, log)
-	if err != nil {
-		return nil, fmt.Errorf("build scheduler: %w", err)
+	// Build plugin runtime if not injected.
+	if a.pluginRuntime == nil {
+		a.pluginRuntime = pluginruntime.New(pluginruntime.Config{
+			Enabled:            cfg.Plugin.Enabled,
+			RuntimePath:        cfg.Plugin.RuntimePath,
+			SocketPath:         cfg.Plugin.SocketPath,
+			AutoStart:          cfg.Plugin.AutoStart,
+			StartupTimeout:     time.Duration(cfg.Plugin.StartupTimeoutSeconds) * time.Second,
+			RequestTimeout:     time.Duration(cfg.Plugin.RequestTimeoutSeconds) * time.Second,
+			MaxConcurrentTasks: cfg.Plugin.MaxConcurrentTasks,
+			MaxResultBytes:     cfg.Plugin.MaxResultBytes,
+			ChunkSizeBytes:     cfg.Plugin.ChunkSizeBytes,
+			SandboxProfile:     cfg.Plugin.SandboxProfile,
+		}, log)
 	}
 
-	// Build gRPC client.
-	grpcCfg := grpcclient.Config{
-		ServerAddr:       cfg.GRPC.ServerAddr,
-		AgentID:          cfg.Agent.ID,
-		EnrollmentToken:  cfg.GRPC.EnrollToken,
-		CertPath:         cfg.GRPC.MTLS.CertFile,
-		KeyPath:          cfg.GRPC.MTLS.KeyFile,
-		CAPath:           cfg.GRPC.MTLS.CAFile,
-		HeartbeatSeconds: cfg.GRPC.HeartbeatIntervalSeconds,
-		ReconnectMaxSec:  cfg.GRPC.ReconnectMaxBackoffMS / 1000,
+	// Build collector pipeline scheduler if not injected.
+	if a.scheduler == nil {
+		sched, err := buildScheduler(cfg, log)
+		if err != nil {
+			return nil, fmt.Errorf("build scheduler: %w", err)
+		}
+		a.scheduler = sched
 	}
-	grpcRecv := grpcclient.NewReceiver(log)
-	grpcCl := grpcclient.NewClient(grpcCfg, log, grpcRecv)
 
-	// Build sandbox executor (only when enabled).
-	var sandboxExec *sandbox.Executor
+	// Build gRPC client if not injected.
+	var grpcRecv *grpcclient.Receiver
+	if a.grpcClient == nil {
+		grpcCfg := grpcclient.Config{
+			ServerAddr:       cfg.GRPC.ServerAddr,
+			AgentID:          cfg.Agent.ID,
+			EnrollmentToken:  cfg.GRPC.EnrollToken,
+			CertPath:         cfg.GRPC.MTLS.CertFile,
+			KeyPath:          cfg.GRPC.MTLS.KeyFile,
+			CAPath:           cfg.GRPC.MTLS.CAFile,
+			HeartbeatSeconds: cfg.GRPC.HeartbeatIntervalSeconds,
+			ReconnectMaxSec:  cfg.GRPC.ReconnectMaxBackoffMS / 1000,
+		}
+		grpcRecv = grpcclient.NewReceiver(log)
+		a.grpcClient = grpcclient.NewClient(grpcCfg, log, grpcRecv)
+	}
+
+	// Build sandbox executor (only when enabled, always concrete).
 	if cfg.Sandbox.Enabled {
-		sandboxExec = sandbox.NewExecutor(sandbox.Config{
+		a.sandboxExec = sandbox.NewExecutor(sandbox.Config{
 			NsjailPath:         cfg.Sandbox.NsjailPath,
 			WorkDir:            cfg.Sandbox.BaseWorkdir,
 			CgroupBase:         cfg.Sandbox.CgroupBasePath,
@@ -179,41 +201,33 @@ func NewAgent(cfg *config.Config, log zerolog.Logger) (*Agent, error) {
 		}, log)
 	}
 
+	// Build HTTP server if not injected.
 	dispatcher := task.NewDispatcher()
-	srv := server.New(
-		cfg.Server.ListenAddr,
-		log,
-		exec,
-		dispatcher,
-		startedAt,
-		server.Options{
-			Auth: server.AuthConfig{
-				Enabled:     cfg.Auth.Enabled,
-				BearerToken: cfg.Auth.BearerToken,
+	if a.server == nil {
+		a.server = server.New(
+			cfg.Server.ListenAddr,
+			log,
+			a.executor,
+			dispatcher,
+			a.startedAt,
+			server.Options{
+				Auth: server.AuthConfig{
+					Enabled:     cfg.Auth.Enabled,
+					BearerToken: cfg.Auth.BearerToken,
+				},
+				Prometheus: server.PrometheusConfig{
+					Enabled:         cfg.Prometheus.Enabled,
+					Path:            cfg.Prometheus.Path,
+					ProtectWithAuth: cfg.Prometheus.ProtectWithAuth,
+				},
 			},
-			Prometheus: server.PrometheusConfig{
-				Enabled:         cfg.Prometheus.Enabled,
-				Path:            cfg.Prometheus.Path,
-				ProtectWithAuth: cfg.Prometheus.ProtectWithAuth,
-			},
-		},
-	)
-
-	a := &Agent{
-		cfg:           cfg,
-		log:           log,
-		manager:       manager,
-		reporter:      rep,
-		server:        srv,
-		executor:      exec,
-		pluginRuntime: pr,
-		scheduler:     sched,
-		grpcClient:    grpcCl,
-		sandboxExec:   sandboxExec,
-		startedAt:     startedAt,
+		)
 	}
+
 	a.registerTaskHandlers(dispatcher)
-	a.registerGRPCHandlers(grpcRecv)
+	if grpcRecv != nil {
+		a.registerGRPCHandlers(grpcRecv)
+	}
 	return a, nil
 }
 
