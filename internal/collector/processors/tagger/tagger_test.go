@@ -178,3 +178,115 @@ func TestRegisteredInDefaultRegistry(t *testing.T) {
 		t.Fatal("expected non-nil processor from factory")
 	}
 }
+
+func TestApplyNilMetricInSlice(t *testing.T) {
+	p := New(Config{
+		Tags: map[string]string{"env": "prod"},
+	})
+
+	m := collector.NewMetric("cpu",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"value": float64(1)},
+		collector.Gauge, time.Now())
+
+	// A nil metric in the slice causes a panic because Apply calls m.AddTag
+	// without a nil check. This test documents that edge case.
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when slice contains nil metric, but did not panic")
+		}
+	}()
+
+	p.Apply([]*collector.Metric{nil, m})
+}
+
+func TestApplyEmptyTagsMap(t *testing.T) {
+	p := New(Config{
+		Tags: map[string]string{"env": "production"},
+	})
+
+	// Metric with no existing tags (empty map).
+	m := collector.NewMetric("cpu",
+		map[string]string{},
+		map[string]interface{}{"value": float64(42)},
+		collector.Gauge, time.Now())
+
+	result := p.Apply([]*collector.Metric{m})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 metric, got %d", len(result))
+	}
+
+	tags := result[0].Tags()
+	if tags["env"] != "production" {
+		t.Errorf("expected env=production, got %q", tags["env"])
+	}
+	// Verify no unexpected tags were added.
+	if len(tags) != 1 {
+		t.Errorf("expected 1 tag, got %d", len(tags))
+	}
+}
+
+func TestApplyTagOverride(t *testing.T) {
+	p := New(Config{
+		Tags: map[string]string{
+			"env":  "production",
+			"host": "new-host",
+		},
+	})
+
+	// Metric already has "env" and "host" tags — static tags should override them.
+	m := collector.NewMetric("cpu",
+		map[string]string{"env": "development", "host": "old-host"},
+		map[string]interface{}{"value": float64(42)},
+		collector.Gauge, time.Now())
+
+	result := p.Apply([]*collector.Metric{m})
+	tags := result[0].Tags()
+
+	if tags["env"] != "production" {
+		t.Errorf("expected env=production after override, got %q", tags["env"])
+	}
+	if tags["host"] != "new-host" {
+		t.Errorf("expected host=new-host after override, got %q", tags["host"])
+	}
+}
+
+func TestApplyConditionWhenNameExactMatch(t *testing.T) {
+	p := New(Config{
+		Conditions: []Condition{
+			{Tag: "severity", Value: "critical", WhenName: "disk"},
+		},
+	})
+
+	// Metric name exactly matches WhenName — condition should apply.
+	mMatch := collector.NewMetric("disk",
+		map[string]string{},
+		map[string]interface{}{"value": float64(90)},
+		collector.Gauge, time.Now())
+
+	// Metric name contains but is not equal to WhenName — condition should NOT apply.
+	mPartial := collector.NewMetric("disk_io",
+		map[string]string{},
+		map[string]interface{}{"value": float64(50)},
+		collector.Gauge, time.Now())
+
+	result := p.Apply([]*collector.Metric{mMatch, mPartial})
+
+	if result[0].Tags()["severity"] != "critical" {
+		t.Errorf("expected severity=critical on disk metric, got %q", result[0].Tags()["severity"])
+	}
+	if _, ok := result[1].Tags()["severity"]; ok {
+		t.Error("expected no severity tag on disk_io metric (partial name match)")
+	}
+}
+
+func TestApplyEmptySlice(t *testing.T) {
+	p := New(Config{
+		Tags: map[string]string{"env": "prod"},
+	})
+
+	result := p.Apply([]*collector.Metric{})
+	if len(result) != 0 {
+		t.Errorf("expected 0 metrics, got %d", len(result))
+	}
+}
