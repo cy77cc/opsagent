@@ -1,5 +1,8 @@
 # Spec 4: Pipeline 增强
 
+> 日期: 2026-04-29
+> 状态: Draft
+
 ## Context
 
 OpsAgent 的 Telegraf-style pipeline（Input → Processor → Aggregator → Output）已有 2 个 processor（tagger、regex）和 2 个 aggregator（avg、sum）。但缺少几个关键的 pipeline 组件：
@@ -10,14 +13,23 @@ OpsAgent 的 Telegraf-style pipeline（Input → Processor → Aggregator → Ou
 
 这些组件直接插入现有 pipeline 架构，遵循已有的 processor 和 aggregator 接口。
 
-**依赖：** Spec 1（测试模式已建立）
-
 ## 目标
 
-1. 新增 Delta Processor，支持从累计计数器计算速率
+1. 新增 Delta/Rate Processor，支持从累计计数器计算 delta 和每秒速率
 2. 新增 Min/Max Aggregator，跟踪窗口内极值
 3. 新增 Percentile Aggregator，支持 p50/p95/p99
 4. 所有新组件测试覆盖率 ≥80%
+
+## 设计决策
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| Delta 输出模式 | 同时支持 delta 和 rate，配置切换 | rate 用于 dashboard，delta 用于累计统计 |
+| Counter wrap 处理 | 输出 0 | 安全保守，避免错误值误导告警 |
+| Percentile 采样上限 | 不限制 | 60s 窗口 × 秒级采集 = 60 值，内存可忽略 |
+| 热重载状态 | 允许丢失 | 重载是低频事件，丢失一次 delta 可接受 |
+| 聚合粒度 | 全局聚合 | 和现有 avg/sum 保持一致 |
+| 整体方案 | 三个独立组件 | 单一职责，遵循现有 avg/sum 分离模式 |
 
 ## 设计
 
@@ -27,14 +39,22 @@ OpsAgent 的 Telegraf-style pipeline（Input → Processor → Aggregator → Ou
 
 **接口：** 实现 `collector.Processor`
 
-**原理：** 存储每个 metric（按 name+tags 唯一标识）的上一次字段值，输出 `current - previous`。如果 previous 不存在（首次采集），输出 0 并存储当前值。
+**配置：**
+```yaml
+[[processors.delta]]
+  fields = ["read_bytes", "write_bytes", "read_count", "write_count"]
+  output = "rate"              # "delta" | "rate"，默认 "rate"
+  max_stale_seconds = 300      # 超过此时间未更新的条目自动过期，默认 300
+```
 
+**核心结构：**
 ```go
 type DeltaProcessor struct {
-    fields           []string      // 需要计算 delta 的字段名
-    maxStaleSeconds  int64         // 超过此时间未更新的条目自动过期
-    previous         map[string]*metricSnapshot  // key: metric name+tags hash
-    mu               sync.Mutex
+    fields          []string
+    output          string        // "delta" 或 "rate"
+    maxStaleSeconds int64
+    previous        map[string]*metricSnapshot  // key: metric name+tags hash
+    mu              sync.Mutex
 }
 
 type metricSnapshot struct {
@@ -43,26 +63,22 @@ type metricSnapshot struct {
 }
 ```
 
-**配置：**
-```yaml
-[[processors.delta]]
-  fields = ["read_bytes", "write_bytes", "read_count", "write_count"]
-  max_stale_seconds = 300  # 5 分钟未更新则过期
-```
-
 **处理逻辑：**
-1. 对每个 metric，检查 name 是否在 `fields` 中
+1. 对每个 metric，检查字段名是否在 `fields` 配置中
 2. 计算 metric 的唯一 key（name + sorted tags）
 3. 查找 previous snapshot
-4. 如果找到：输出 delta = current - previous（处理 int64/float64 类型转换）
-5. 如果未找到：输出 0
-6. 更新 previous snapshot
-7. 后台 goroutine 定期清理过期条目
+4. 计算 delta = current - previous
+5. Counter wrap 保护：`current < previous` 时输出 0
+6. 首次采集（无 previous）时输出 0
+7. 根据 `output` 配置：
+   - `"delta"` — 输出原始差值（保留 int64/float64 类型）
+   - `"rate"` — 输出 `delta / elapsed_seconds`（统一 float64）
+8. 更新 previous snapshot
+9. 后台 goroutine 定期清理超过 `max_stale_seconds` 的过期条目
 
 **类型处理：**
-- int64 - int64 → int64
-- float64 - float64 → float64
-- int64 - float64 → float64（自动提升）
+- delta 模式：int64 - int64 → int64，其他组合 → float64
+- rate 模式：统一 float64
 - 非数值字段 → 跳过，保留原值
 
 **工作量：** M
@@ -73,17 +89,6 @@ type metricSnapshot struct {
 
 **接口：** 实现 `collector.Aggregator`
 
-**原理：** 在聚合窗口内跟踪每个字段的最小值和最大值，Push 时输出。
-
-```go
-type MinMaxAggregator struct {
-    fields []string
-    min    map[string]map[string]interface{}  // field -> metric_key -> min_value
-    max    map[string]map[string]interface{}  // field -> metric_key -> max_value
-    mu     sync.Mutex
-}
-```
-
 **配置：**
 ```yaml
 [[aggregators.minmax]]
@@ -91,15 +96,30 @@ type MinMaxAggregator struct {
   # push_interval 跟随全局 aggregator 周期（默认 60s）
 ```
 
+**核心结构：**
+```go
+type MinMaxAggregator struct {
+    fields []string
+    min    map[string]float64    // field -> min_value
+    max    map[string]float64    // field -> max_value
+    tags   map[string]string
+    name   string
+    mu     sync.Mutex
+}
+```
+
 **输出指标：**
 - `{name}_min` — 窗口内最小值（Gauge）
 - `{name}_max` — 窗口内最大值（Gauge）
 
 **实现模式：** 完全遵循 `internal/collector/aggregators/avg/avg.go` 的模式：
-- `Init(cfg)` — 解析配置
-- `Add(metric)` — 更新 min/max
-- `Push(acc)` — 输出 `{name}_min` 和 `{name}_max`
+- `Init(cfg)` — 解析 fields 配置
+- `Add(metric)` — 全局聚合，更新 min/max
+- `Push(acc)` — 通过 `acc.AddGaugeWithTimestamp` 输出 `{name}_min` 和 `{name}_max`
 - `Reset()` — 清空状态
+- `init()` — 注册到 `collector.RegisterAggregator("minmax", ...)`
+
+**类型处理：** 统一转 float64 比较
 
 **工作量：** S
 
@@ -109,45 +129,32 @@ type MinMaxAggregator struct {
 
 **接口：** 实现 `collector.Aggregator`
 
-**原理：** 收集聚合窗口内的所有值，Push 时计算指定的百分位数。
-
-```go
-type PercentileAggregator struct {
-    fields       []string
-    percentiles  []float64     // e.g., [50, 95, 99]
-    values       map[string][]float64  // field -> collected values
-    mu           sync.Mutex
-}
-```
-
 **配置：**
 ```yaml
 [[aggregators.percentile]]
   fields = ["response_time_ms", "latency_ms"]
-  percentiles = [50, 95, 99]
+  percentiles = [50, 95, 99]    # 默认 [50, 95, 99]
+```
+
+**核心结构：**
+```go
+type PercentileAggregator struct {
+    fields      []string
+    percentiles []float64            // e.g., [50, 95, 99]
+    values      map[string][]float64 // field -> collected values
+    tags        map[string]string
+    name        string
+    mu          sync.Mutex
+}
 ```
 
 **输出指标：**
-- `{name}_p50` — 第 50 百分位（Gauge）
-- `{name}_p95` — 第 95 百分位（Gauge）
-- `{name}_p99` — 第 99 百分位（Gauge）
+- `{name}_p50`、`{name}_p95`、`{name}_p99`（Gauge）
 
-**算法选择：**
-
-| 方案 | 优点 | 缺点 |
-|------|------|------|
-| 排序切片 | 简单精确 | 内存随窗口大小线性增长 |
-| T-Digest | 近似但内存固定 | 实现复杂，需引入依赖 |
-
-**推荐：** 排序切片方案。理由：
-1. 聚合窗口通常 60s，数据量有限（每秒一次采集 = 60 个值）
-2. 精确性更重要（p99 的误差会被放大）
+**算法：** 排序切片 + 线性插值。理由：
+1. 聚合窗口 60s × 秒级采集 = 60 个值，内存可忽略
+2. 精确性优先（p99 误差会被放大）
 3. 不引入额外依赖
-
-**实现：**
-1. `Add(metric)` — 将指定字段的值 append 到 `values[field]`
-2. `Push(acc)` — 对每个字段排序，计算百分位，输出
-3. `Reset()` — 清空 `values`
 
 **百分位计算：**
 ```go
@@ -165,6 +172,13 @@ func percentile(sorted []float64, p float64) float64 {
 }
 ```
 
+**实现模式：**
+- `Init(cfg)` — 解析 fields 和 percentiles 配置
+- `Add(metric)` — 将指定字段的值 append 到 `values[field]`，全局聚合
+- `Push(acc)` — 对每个字段排序，计算百分位，通过 `acc.AddGaugeWithTimestamp` 输出
+- `Reset()` — 清空 values
+- `init()` — 注册到 `collector.RegisterAggregator("percentile", ...)`
+
 **工作量：** M
 
 ## 注册与集成
@@ -179,13 +193,17 @@ _ "github.com/cy77cc/opsagent/internal/collector/aggregators/percentile"
 
 更新 `configs/config.yaml` 添加示例配置。
 
+**热重载：** 无需额外处理，现有 `CollectorReloader` 的销毁-重建逻辑自动适用。
+
 ## 测试要求
 
-### Delta Processor 测试
+### Delta/Rate Processor 测试
 - 首次采集：输出 0，存储当前值
-- 连续采集：输出正确的 delta
+- 连续采集（rate 模式）：输出 `delta / elapsed_seconds`
+- 连续采集（delta 模式）：输出正确的原始差值
+- Counter wrap：`current < previous` 时输出 0
 - 类型混合：int64 和 float64 混合处理
-- 过期清理：超过 max_stale_seconds 的条目被清除
+- 过期清理：超过 `max_stale_seconds` 的条目被清除
 - 缺失字段：metric 缺少指定字段时跳过
 - 并发安全：多个 input goroutine 同时写入
 
@@ -200,6 +218,7 @@ _ "github.com/cy77cc/opsagent/internal/collector/aggregators/percentile"
 - 空窗口：Push 输出 0
 - 单值：所有百分位等于该值
 - 大数据量：1000+ 值的性能和正确性
+- 自定义 percentiles：非标准配置
 
 ## 验证方式
 
