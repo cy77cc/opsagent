@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func TestPromRWOutput_Init(t *testing.T) {

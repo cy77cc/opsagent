@@ -6,7 +6,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/disk"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func init() {

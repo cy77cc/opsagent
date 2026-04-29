@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func TestRenderPrometheus(t *testing.T) {

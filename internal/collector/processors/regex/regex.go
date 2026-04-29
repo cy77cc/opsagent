@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 // Rule defines a single tag regex replacement rule.

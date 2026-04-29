@@ -1,14 +1,14 @@
 package tagger
 
 import (
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 // Condition defines a conditional tag addition rule.
 type Condition struct {
-	Tag       string `mapstructure:"tag"`
-	Value     string `mapstructure:"value"`
-	WhenName  string `mapstructure:"when_name"`
+	Tag      string `mapstructure:"tag"`
+	Value    string `mapstructure:"value"`
+	WhenName string `mapstructure:"when_name"`
 }
 
 // Config holds the tagger processor configuration.

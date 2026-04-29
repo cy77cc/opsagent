@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cy77cc/nodeagentx/internal/executor"
+	"github.com/cy77cc/nodeagentx/internal/task"
 	"github.com/rs/zerolog"
-	"nodeagentx/internal/executor"
-	"nodeagentx/internal/task"
 )
 
 func TestAuthMiddlewareProtectsAPI(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
-	pb "nodeagentx/internal/grpcclient/proto"
+	"github.com/cy77cc/nodeagentx/internal/collector"
+	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
 )
 
 func TestSenderBatchToProto(t *testing.T) {

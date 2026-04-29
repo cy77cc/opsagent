@@ -8,7 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"nodeagentx/internal/sandbox"
+	"github.com/cy77cc/nodeagentx/internal/sandbox"
 )
 
 // TestSandboxExecutorSimpleCommand verifies that a simple echo command

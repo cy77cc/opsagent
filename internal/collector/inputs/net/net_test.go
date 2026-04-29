@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func TestNetInputInit(t *testing.T) {

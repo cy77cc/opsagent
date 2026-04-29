@@ -3,8 +3,8 @@ package grpcclient
 import (
 	"time"
 
-	"nodeagentx/internal/collector"
-	pb "nodeagentx/internal/grpcclient/proto"
+	"github.com/cy77cc/nodeagentx/internal/collector"
+	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
 )
 
 // ExecStats holds resource-usage statistics for an executed task.
@@ -68,10 +68,10 @@ func NewHeartbeat(agentID, status string, info *pb.AgentInfo) *pb.AgentMessage {
 	return &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Heartbeat{
 			Heartbeat: &pb.Heartbeat{
-				AgentId:    agentID,
+				AgentId:     agentID,
 				TimestampMs: time.Now().UnixMilli(),
-				Status:     status,
-				AgentInfo:  info,
+				Status:      status,
+				AgentInfo:   info,
 			},
 		},
 	}

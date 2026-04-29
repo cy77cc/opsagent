@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func TestNew(t *testing.T) {

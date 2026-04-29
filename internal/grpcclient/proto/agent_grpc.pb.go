@@ -8,6 +8,7 @@ package proto
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -19,7 +20,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_Connect_FullMethodName = "/nodeagentx.AgentService/Connect"
+	AgentService_Connect_FullMethodName = "/github.com/cy77cc/nodeagentx.AgentService/Connect"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -100,7 +101,7 @@ type AgentService_ConnectServer = grpc.BidiStreamingServer[AgentMessage, Platfor
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AgentService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "nodeagentx.AgentService",
+	ServiceName: "github.com/cy77cc/nodeagentx.AgentService",
 	HandlerType: (*AgentServiceServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{

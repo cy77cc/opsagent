@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 
-	pb "nodeagentx/internal/grpcclient/proto"
+	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
 )
 
 const bufSize = 1024 * 1024
@@ -18,9 +18,9 @@ const bufSize = 1024 * 1024
 // mockAgentService implements pb.AgentServiceServer and records Connect calls.
 type mockAgentService struct {
 	pb.UnimplementedAgentServiceServer
-	mu          sync.Mutex
-	connectCnt  int
-	lastStream  grpc.BidiStreamingServer[pb.AgentMessage, pb.PlatformMessage]
+	mu         sync.Mutex
+	connectCnt int
+	lastStream grpc.BidiStreamingServer[pb.AgentMessage, pb.PlatformMessage]
 }
 
 func (m *mockAgentService) Connect(stream grpc.BidiStreamingServer[pb.AgentMessage, pb.PlatformMessage]) error {

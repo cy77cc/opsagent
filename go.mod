@@ -1,4 +1,4 @@
-module nodeagentx
+module github.com/cy77cc/nodeagentx
 
 go 1.24.0
 

@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/executor"
+	"github.com/cy77cc/nodeagentx/internal/task"
 	"github.com/rs/zerolog"
-	"nodeagentx/internal/collector"
-	"nodeagentx/internal/executor"
-	"nodeagentx/internal/task"
 )
 
 // AuthConfig controls optional bearer auth middleware.

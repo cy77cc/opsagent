@@ -7,7 +7,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/process"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func init() {
@@ -126,8 +126,8 @@ func (p *ProcessInput) Gather(ctx context.Context, acc collector.Accumulator) er
 			"name": info.name,
 		}
 		fields := map[string]interface{}{
-			"cpu_percent":  info.cpuPercent,
-			"mem_percent":  float64(info.memPercent),
+			"cpu_percent":   info.cpuPercent,
+			"mem_percent":   float64(info.memPercent),
 			"mem_rss_bytes": int64(info.memRSS),
 		}
 		acc.AddGauge("process", tags, fields)

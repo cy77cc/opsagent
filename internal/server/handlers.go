@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"nodeagentx/internal/executor"
-	"nodeagentx/internal/task"
+	"github.com/cy77cc/nodeagentx/internal/executor"
+	"github.com/cy77cc/nodeagentx/internal/task"
 )
 
 type apiResponse struct {

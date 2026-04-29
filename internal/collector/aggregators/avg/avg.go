@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 // Config holds the avg aggregator configuration.

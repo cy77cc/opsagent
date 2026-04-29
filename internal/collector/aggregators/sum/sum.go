@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 // Config holds the sum aggregator configuration.
@@ -14,12 +14,12 @@ type Config struct {
 
 // Aggregator computes running sums for specified fields.
 type Aggregator struct {
-	mu       sync.Mutex
-	fields   []string
-	sums     map[string]interface{}
-	isInt    map[string]bool
-	tags     map[string]string
-	name     string
+	mu     sync.Mutex
+	fields []string
+	sums   map[string]interface{}
+	isInt  map[string]bool
+	tags   map[string]string
+	name   string
 }
 
 // New creates a new sum Aggregator from the given config.

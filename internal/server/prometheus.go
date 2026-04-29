@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, _ *http.Request) {

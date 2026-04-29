@@ -6,7 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	pb "nodeagentx/internal/grpcclient/proto"
+	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
 )
 
 // CommandHandler handles ExecuteCommand platform messages.

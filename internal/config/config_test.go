@@ -10,10 +10,10 @@ import (
 // validGRPCConfig returns a minimal valid GRPC config for use in tests.
 func validGRPCConfig() GRPCConfig {
 	return GRPCConfig{
-		ServerAddr:               "platform.example.com:443",
-		HeartbeatIntervalSeconds: 15,
+		ServerAddr:                "platform.example.com:443",
+		HeartbeatIntervalSeconds:  15,
 		ReconnectInitialBackoffMS: 1000,
-		ReconnectMaxBackoffMS:    30000,
+		ReconnectMaxBackoffMS:     30000,
 	}
 }
 
@@ -150,7 +150,7 @@ func TestValidatePluginRuntimePathRequiredWhenAutoStart(t *testing.T) {
 	cfg.Plugin = PluginConfig{
 		Enabled:               true,
 		AutoStart:             true,
-		SocketPath:            "/tmp/nodeagentx/plugin.sock",
+		SocketPath:            "/tmp/github.com/cy77cc/nodeagentx/plugin.sock",
 		RuntimePath:           "",
 		StartupTimeoutSeconds: 5,
 		RequestTimeoutSeconds: 30,

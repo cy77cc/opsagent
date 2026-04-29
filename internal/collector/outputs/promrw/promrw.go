@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 const (

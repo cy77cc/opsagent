@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/collector"
 )
 
 func TestPrometheusOutput_Init(t *testing.T) {
@@ -22,7 +22,7 @@ func TestPrometheusOutput_Init(t *testing.T) {
 		{
 			name: "custom config",
 			cfg: map[string]interface{}{
-				"path": "/custom",
+				"path":  "/custom",
 				":8080": ":8080",
 			},
 			wantErr: false,

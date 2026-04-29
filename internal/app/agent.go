@@ -10,33 +10,33 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cy77cc/nodeagentx/internal/collector"
+	"github.com/cy77cc/nodeagentx/internal/config"
+	"github.com/cy77cc/nodeagentx/internal/executor"
+	"github.com/cy77cc/nodeagentx/internal/grpcclient"
+	pb "github.com/cy77cc/nodeagentx/internal/grpcclient/proto"
+	"github.com/cy77cc/nodeagentx/internal/logger"
+	"github.com/cy77cc/nodeagentx/internal/pluginruntime"
+	"github.com/cy77cc/nodeagentx/internal/reporter"
+	"github.com/cy77cc/nodeagentx/internal/sandbox"
+	"github.com/cy77cc/nodeagentx/internal/server"
+	"github.com/cy77cc/nodeagentx/internal/task"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"nodeagentx/internal/collector"
-	"nodeagentx/internal/config"
-	"nodeagentx/internal/executor"
-	"nodeagentx/internal/grpcclient"
-	pb "nodeagentx/internal/grpcclient/proto"
-	"nodeagentx/internal/logger"
-	"nodeagentx/internal/pluginruntime"
-	"nodeagentx/internal/reporter"
-	"nodeagentx/internal/sandbox"
-	"nodeagentx/internal/server"
-	"nodeagentx/internal/task"
 
 	// Blank imports to trigger init() plugin registration.
-	_ "nodeagentx/internal/collector/aggregators/avg"
-	_ "nodeagentx/internal/collector/aggregators/sum"
-	_ "nodeagentx/internal/collector/inputs/cpu"
-	_ "nodeagentx/internal/collector/inputs/disk"
-	_ "nodeagentx/internal/collector/inputs/memory"
-	_ "nodeagentx/internal/collector/inputs/net"
-	_ "nodeagentx/internal/collector/inputs/process"
-	_ "nodeagentx/internal/collector/outputs/http"
-	_ "nodeagentx/internal/collector/outputs/prometheus"
-	_ "nodeagentx/internal/collector/outputs/promrw"
-	_ "nodeagentx/internal/collector/processors/regex"
-	_ "nodeagentx/internal/collector/processors/tagger"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/aggregators/avg"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/aggregators/sum"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/cpu"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/disk"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/memory"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/net"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/inputs/process"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/outputs/http"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/outputs/prometheus"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/outputs/promrw"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/processors/regex"
+	_ "github.com/cy77cc/nodeagentx/internal/collector/processors/tagger"
 )
 
 // Agent wires collection, reporting, local API server, and task dispatch.
@@ -59,7 +59,7 @@ func NewRootCommand() *cobra.Command {
 	var configPath string
 
 	rootCmd := &cobra.Command{
-		Use:   "nodeagentx",
+		Use:   "github.com/cy77cc/nodeagentx",
 		Short: "Node metrics and remote exec agent",
 	}
 
@@ -149,10 +149,10 @@ func NewAgent(cfg *config.Config, log zerolog.Logger) (*Agent, error) {
 	var sandboxExec *sandbox.Executor
 	if cfg.Sandbox.Enabled {
 		sandboxExec = sandbox.NewExecutor(sandbox.Config{
-			NsjailPath:  cfg.Sandbox.NsjailPath,
-			WorkDir:     cfg.Sandbox.BaseWorkdir,
-			CgroupBase:  cfg.Sandbox.CgroupBasePath,
-			TimeoutSec:  cfg.Sandbox.DefaultTimeoutSeconds,
+			NsjailPath: cfg.Sandbox.NsjailPath,
+			WorkDir:    cfg.Sandbox.BaseWorkdir,
+			CgroupBase: cfg.Sandbox.CgroupBasePath,
+			TimeoutSec: cfg.Sandbox.DefaultTimeoutSeconds,
 			Policy: sandbox.Policy{
 				AllowedCommands:     cfg.Sandbox.Policy.AllowedCommands,
 				BlockedCommands:     cfg.Sandbox.Policy.BlockedCommands,
