@@ -33,7 +33,7 @@ jobs:
       - name: Build ${{ matrix.goarch }}
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
-            go build -trimpath -ldflags="-s -w" \
+            go build -trimpath -ldflags="-s -w -X main.version=${{ steps.version.outputs.tag }}" \
             -o dist/${{ matrix.goarch }}/${{ env.APP_NAME }} ./cmd/agent
 
       - name: Package ${{ matrix.goarch }}

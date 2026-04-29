@@ -17,7 +17,7 @@ else
     GOARCHES=("amd64" "arm64")
 fi
 
-LDFLAGS="-s -w"
+LDFLAGS="-s -w -X main.version=${VERSION}"
 
 echo "OpsAgent Packager — version: ${VERSION}"
 echo ""

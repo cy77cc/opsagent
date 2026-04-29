@@ -1,6 +1,7 @@
 package avg
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -30,6 +31,32 @@ func New(cfg Config) *Aggregator {
 		counts: make(map[string]int),
 		tags:   make(map[string]string),
 	}
+}
+
+// Init parses configuration from a map (e.g. from YAML unmarshaling).
+// Expects "fields" as a []interface{} of field name strings.
+func (a *Aggregator) Init(cfg map[string]interface{}) error {
+	a.sums = make(map[string]float64)
+	a.counts = make(map[string]int)
+	a.tags = make(map[string]string)
+
+	raw, ok := cfg["fields"]
+	if !ok {
+		return nil
+	}
+	fieldList, ok := raw.([]interface{})
+	if !ok {
+		return fmt.Errorf("avg: \"fields\" must be a list, got %T", raw)
+	}
+	a.fields = make([]string, 0, len(fieldList))
+	for i, entry := range fieldList {
+		name, ok := entry.(string)
+		if !ok {
+			return fmt.Errorf("avg: field entry %d must be a string, got %T", i, entry)
+		}
+		a.fields = append(a.fields, name)
+	}
+	return nil
 }
 
 // Add accumulates values from the given metric.
@@ -114,6 +141,6 @@ fields = ["value", "latency"]
 
 func init() {
 	collector.RegisterAggregator("avg", func() collector.Aggregator {
-		return New(Config{})
+		return &Aggregator{}
 	})
 }

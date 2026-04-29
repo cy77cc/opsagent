@@ -1,6 +1,7 @@
 package sum
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -30,6 +31,32 @@ func New(cfg Config) *Aggregator {
 		isInt:  make(map[string]bool),
 		tags:   make(map[string]string),
 	}
+}
+
+// Init parses configuration from a map (e.g. from YAML unmarshaling).
+// Expects "fields" as a []interface{} of field name strings.
+func (a *Aggregator) Init(cfg map[string]interface{}) error {
+	a.sums = make(map[string]interface{})
+	a.isInt = make(map[string]bool)
+	a.tags = make(map[string]string)
+
+	raw, ok := cfg["fields"]
+	if !ok {
+		return nil
+	}
+	fieldList, ok := raw.([]interface{})
+	if !ok {
+		return fmt.Errorf("sum: \"fields\" must be a list, got %T", raw)
+	}
+	a.fields = make([]string, 0, len(fieldList))
+	for i, entry := range fieldList {
+		name, ok := entry.(string)
+		if !ok {
+			return fmt.Errorf("sum: field entry %d must be a string, got %T", i, entry)
+		}
+		a.fields = append(a.fields, name)
+	}
+	return nil
 }
 
 // Add accumulates values from the given metric.
@@ -131,6 +158,6 @@ fields = ["bytes_sent", "request_count"]
 
 func init() {
 	collector.RegisterAggregator("sum", func() collector.Aggregator {
-		return New(Config{})
+		return &Aggregator{}
 	})
 }

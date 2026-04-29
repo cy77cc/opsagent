@@ -98,6 +98,14 @@ func TestPipelineIntegration(t *testing.T) {
 		t.Fatal("tagger processor not found in DefaultRegistry")
 	}
 
+	// Create tagger processor with static tags.
+	tagger := procFactory()
+	if err := tagger.Init(map[string]interface{}{
+		"tags": map[string]interface{}{"env": "test", "cluster": "dev"},
+	}); err != nil {
+		t.Fatalf("tagger Init failed: %v", err)
+	}
+
 	// Create inputs from factories.
 	cpuInput := cpuFactory()
 	if err := cpuInput.Init(nil); err != nil {
@@ -124,7 +132,7 @@ func TestPipelineIntegration(t *testing.T) {
 	}
 
 	logger := zerolog.Nop()
-	scheduler := collector.NewScheduler(scheduledInputs, logger)
+	scheduler := collector.NewScheduler(scheduledInputs, []collector.Processor{tagger}, nil, nil, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

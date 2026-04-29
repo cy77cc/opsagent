@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func TestPrometheusOutput_RenderPrometheus(t *testing.T) {
 		*collector.NewMetric("requests.count", map[string]string{"endpoint": "/api", "method": "GET"}, map[string]interface{}{"value": int64(100)}, collector.Counter, now),
 	}
 
-	if err := p.Write(metrics); err != nil {
+	if err := p.Write(context.Background(), metrics); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
@@ -135,7 +136,7 @@ func TestPrometheusOutput_Write(t *testing.T) {
 	m1 := collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": 1.0}, collector.Gauge, now)
 	m2 := collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": 2.0}, collector.Gauge, now.Add(time.Second))
 
-	if err := p.Write([]collector.Metric{*m1}); err != nil {
+	if err := p.Write(context.Background(), []collector.Metric{*m1}); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
@@ -146,7 +147,7 @@ func TestPrometheusOutput_Write(t *testing.T) {
 	p.mu.RUnlock()
 
 	// Overwrite with newer metric
-	if err := p.Write([]collector.Metric{*m2}); err != nil {
+	if err := p.Write(context.Background(), []collector.Metric{*m2}); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
@@ -187,7 +188,7 @@ func TestPrometheusOutput_LabelSorting(t *testing.T) {
 		now,
 	)
 
-	if err := p.Write([]collector.Metric{*m}); err != nil {
+	if err := p.Write(context.Background(), []collector.Metric{*m}); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
@@ -212,7 +213,7 @@ func TestPrometheusOutput_Timestamp(t *testing.T) {
 	ts := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 	m := collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": 1.0}, collector.Gauge, ts)
 
-	if err := p.Write([]collector.Metric{*m}); err != nil {
+	if err := p.Write(context.Background(), []collector.Metric{*m}); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 

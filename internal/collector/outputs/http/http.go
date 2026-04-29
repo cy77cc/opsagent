@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -80,7 +81,7 @@ func (h *HTTPOutput) Init(cfg map[string]interface{}) error {
 }
 
 // Write sends metrics to the configured HTTP endpoint as JSON.
-func (h *HTTPOutput) Write(metrics []collector.Metric) error {
+func (h *HTTPOutput) Write(ctx context.Context, metrics []collector.Metric) error {
 	for i := 0; i < len(metrics); i += h.batchSize {
 		end := i + h.batchSize
 		if end > len(metrics) {
@@ -88,14 +89,14 @@ func (h *HTTPOutput) Write(metrics []collector.Metric) error {
 		}
 		batch := metrics[i:end]
 
-		if err := h.sendBatch(batch); err != nil {
+		if err := h.sendBatch(ctx, batch); err != nil {
 			return fmt.Errorf("http output: failed to send batch: %w", err)
 		}
 	}
 	return nil
 }
 
-func (h *HTTPOutput) sendBatch(metrics []collector.Metric) error {
+func (h *HTTPOutput) sendBatch(ctx context.Context, metrics []collector.Metric) error {
 	metricsJSON := make([]metricJSON, len(metrics))
 	for i, m := range metrics {
 		metricsJSON[i] = metricJSON{
@@ -122,7 +123,7 @@ func (h *HTTPOutput) sendBatch(metrics []collector.Metric) error {
 			time.Sleep(h.retryInterval)
 		}
 
-		lastErr = h.doRequest(body)
+		lastErr = h.doRequest(ctx, body)
 		if lastErr == nil {
 			return nil
 		}
@@ -131,8 +132,8 @@ func (h *HTTPOutput) sendBatch(metrics []collector.Metric) error {
 	return lastErr
 }
 
-func (h *HTTPOutput) doRequest(body []byte) error {
-	req, err := http.NewRequest(http.MethodPost, h.url, bytes.NewReader(body))
+func (h *HTTPOutput) doRequest(ctx context.Context, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("http output: failed to create request: %w", err)
 	}

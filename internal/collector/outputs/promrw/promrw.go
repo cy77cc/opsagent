@@ -2,6 +2,7 @@ package promrw
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,7 +67,7 @@ func (p *PromRWOutput) Init(cfg map[string]interface{}) error {
 }
 
 // Write converts metrics to Prometheus remote write JSON format and POSTs them.
-func (p *PromRWOutput) Write(metrics []collector.Metric) error {
+func (p *PromRWOutput) Write(_ context.Context, metrics []collector.Metric) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -83,7 +84,7 @@ func (p *PromRWOutput) Write(metrics []collector.Metric) error {
 		return fmt.Errorf("prometheus_remote_write: failed to create request: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/x-protobuf")
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Prometheus-Remote-Write-Version", "0.1.0")
 
 	resp, err := p.client.Do(req)
@@ -118,7 +119,7 @@ func (p *PromRWOutput) buildPayload(metrics []collector.Metric) remoteWritePaylo
 		}
 
 		// Extract numeric value from fields.
-		value := extractNumericValue(m.Fields())
+		value := collector.ExtractNumericValue(m.Fields())
 
 		series[i] = timeseries{
 			Labels: labels,
@@ -148,41 +149,3 @@ func (p *PromRWOutput) SampleConfig() string {
 `
 }
 
-func extractNumericValue(fields map[string]interface{}) float64 {
-	for _, key := range []string{"value", "count", "gauge"} {
-		if v, ok := fields[key]; ok {
-			if f, ok := toFloat64(v); ok {
-				return f
-			}
-		}
-	}
-	for _, v := range fields {
-		if f, ok := toFloat64(v); ok {
-			return f
-		}
-	}
-	return 0
-}
-
-func toFloat64(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int32:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	case uint:
-		return float64(val), true
-	case uint32:
-		return float64(val), true
-	case uint64:
-		return float64(val), true
-	default:
-		return 0, false
-	}
-}

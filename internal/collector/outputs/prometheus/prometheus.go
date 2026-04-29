@@ -1,13 +1,17 @@
 package prometheus
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/cy77cc/opsagent/internal/collector"
 )
@@ -29,6 +33,7 @@ func init() {
 type PrometheusOutput struct {
 	addr   string
 	path   string
+	logger zerolog.Logger
 	mu     sync.RWMutex
 	latest map[string]*collector.Metric
 	server *http.Server
@@ -36,6 +41,7 @@ type PrometheusOutput struct {
 
 // Init configures the Prometheus output from the provided config map.
 func (p *PrometheusOutput) Init(cfg map[string]interface{}) error {
+	p.logger = zerolog.New(os.Stderr).With().Str("component", "prometheus-output").Logger()
 	p.path = defaultPath
 	if v, ok := cfg["path"].(string); ok && v != "" {
 		p.path = v
@@ -63,7 +69,7 @@ func (p *PrometheusOutput) Start() error {
 
 	go func() {
 		if err := p.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("prometheus output: server error: %v\n", err)
+			p.logger.Error().Err(err).Msg("server error")
 		}
 	}()
 
@@ -71,7 +77,7 @@ func (p *PrometheusOutput) Start() error {
 }
 
 // Write stores the latest metrics for scraping.
-func (p *PrometheusOutput) Write(metrics []collector.Metric) error {
+func (p *PrometheusOutput) Write(_ context.Context, metrics []collector.Metric) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -161,7 +167,7 @@ func (p *PrometheusOutput) renderPrometheus() string {
 
 		// Write field values (use first numeric field).
 		fields := m.Fields()
-		value := extractNumericValue(fields)
+		value := collector.ExtractNumericValue(fields)
 		sb.WriteString(" ")
 		sb.WriteString(fmt.Sprintf("%v", value))
 
@@ -184,43 +190,3 @@ func SanitizeName(name string) string {
 	return sanitized
 }
 
-func extractNumericValue(fields map[string]interface{}) float64 {
-	// Try common field names first.
-	for _, key := range []string{"value", "count", "gauge"} {
-		if v, ok := fields[key]; ok {
-			if f, ok := toFloat64(v); ok {
-				return f
-			}
-		}
-	}
-	// Fall back to first field.
-	for _, v := range fields {
-		if f, ok := toFloat64(v); ok {
-			return f
-		}
-	}
-	return 0
-}
-
-func toFloat64(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int32:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	case uint:
-		return float64(val), true
-	case uint32:
-		return float64(val), true
-	case uint64:
-		return float64(val), true
-	default:
-		return 0, false
-	}
-}

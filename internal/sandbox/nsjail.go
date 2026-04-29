@@ -7,6 +7,29 @@ import (
 	"strconv"
 )
 
+// seccompPolicy is a minimal syscall whitelist for sandboxed processes.
+// Only syscalls needed for basic process execution, I/O, and memory management are allowed.
+const seccompPolicy = `ALLOW {
+    read, write, open, close, mmap, munmap, mprotect, brk,
+    access, stat, fstat, lstat, ioctl, pread64, pwrite64,
+    readv, writev, pipe, dup, dup2, nanosleep, getpid,
+    clone, fork, vfork, execve, exit, wait4, kill, uname,
+    fcntl, flock, fsync, fdatasync, truncate, ftruncate,
+    getdents, getcwd, chdir, rename, mkdir, rmdir, link,
+    unlink, readlink, chmod, chown, umask, gettimeofday,
+    getuid, getgid, geteuid, getegid, getppid, getpgrp,
+    set_tid_address, futex, epoll_create, epoll_ctl,
+    epoll_wait, clock_gettime, exit_group, set_robust_list,
+    openat, mkdirat, newfstatat, unlinkat, renameat,
+    readlinkat, faccessat, epoll_create1, pipe2, dup3,
+    prlimit64, getrandom, rseq, sigaltstack, rt_sigaction,
+    rt_sigprocmask, madvise, getpeername, getsockname,
+    socket, connect, bind, listen, accept, accept4,
+    sendto, recvfrom, sendmsg, recvmsg, shutdown,
+    setsockopt, getsockopt, socketpair, eventfd2,
+    timerfd_create, timerfd_settime, timerfd_gettime
+}`
+
 // NsjailConfig holds the resource and isolation parameters for an nsjail execution.
 type NsjailConfig struct {
 	TimeLimit    int      `json:"time_limit"`
@@ -59,8 +82,8 @@ func (c *NsjailConfig) ToArgs(taskID string) []string {
 		"--tmpfsmount=/work:tmpfs:size=134217728",
 	)
 
-	// Seccomp policy string — use a basic allowlist.
-	args = append(args, "--seccomp_policy_string=ALLOW { }")
+	// Seccomp policy string — minimal syscall whitelist.
+	args = append(args, fmt.Sprintf("--seccomp_policy_string=%s", seccompPolicy))
 
 	// Network mode.
 	switch c.NetworkMode {
@@ -90,12 +113,25 @@ func (c *NsjailConfig) CommandArgs(taskID string, command string, cmdArgs []stri
 	return args
 }
 
-// ScriptArgs appends the interpreter invocation to the nsjail args.
-func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptContent string) []string {
+// ScriptArgs appends the interpreter invocation to the nsjail args using a script file path.
+func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptPath string) []string {
 	interpPath := interpreterToPath(interpreter)
 	args := c.ToArgs(taskID)
-	args = append(args, "--", interpPath, "-c", scriptContent)
+	args = append(args, "--", interpPath, scriptPath)
 	return args
+}
+
+// WriteScriptFile writes script content to a temporary file and returns its path.
+func (c *NsjailConfig) WriteScriptFile(taskID, scriptContent string) (string, error) {
+	scriptDir := filepath.Join(os.TempDir(), "nsjail-scripts")
+	if err := os.MkdirAll(scriptDir, 0o700); err != nil {
+		return "", fmt.Errorf("create script dir: %w", err)
+	}
+	scriptPath := filepath.Join(scriptDir, fmt.Sprintf("task-%s.sh", taskID))
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0o600); err != nil {
+		return "", fmt.Errorf("write script file: %w", err)
+	}
+	return scriptPath, nil
 }
 
 // WriteConfigFile writes a minimal nsjail config file for the given task and returns its path.

@@ -22,8 +22,10 @@ type Config struct {
 	MaxPIDs     int    `json:"max_pids"`
 	TimeoutSec  int    `json:"timeout_sec"`
 	MaxOutputKB int    `json:"max_output_kb"`
-	NetworkMode string `json:"network_mode"`
-	Policy      Policy `json:"policy"`
+	NetworkMode        string `json:"network_mode"`
+	Policy             Policy `json:"policy"`
+	MaxConcurrentTasks int    `json:"max_concurrent_tasks"`
+	AuditLogPath       string `json:"audit_log_path"`
 }
 
 // ExecRequest is a sandbox execution request.
@@ -65,6 +67,7 @@ type Executor struct {
 	logger zerolog.Logger
 	audit  *AuditLogger
 	net    *NetworkManager
+	sem    chan struct{}
 }
 
 // NewExecutor creates an Executor with the given configuration.
@@ -96,12 +99,23 @@ func NewExecutor(cfg Config, logger zerolog.Logger) *Executor {
 		cfg.NetworkMode = "disabled"
 	}
 
+	maxConcurrent := cfg.MaxConcurrentTasks
+	if maxConcurrent <= 0 {
+		maxConcurrent = 4
+	}
+
 	return &Executor{
 		cfg:    cfg,
 		logger: logger.With().Str("component", "sandbox-executor").Logger(),
-		audit:  NewAuditLogger(logger),
+		audit:  NewAuditLogger(logger, cfg.AuditLogPath),
 		net:    NewNetworkManager(cfg.NetworkMode != "disabled"),
+		sem:    make(chan struct{}, maxConcurrent),
 	}
+}
+
+// Close releases resources held by the executor (e.g. audit log file handles).
+func (e *Executor) Close() error {
+	return e.audit.Close()
 }
 
 // ExecuteCommand validates the command against the policy and runs it in the sandbox.
@@ -123,13 +137,26 @@ func (e *Executor) ExecuteScript(ctx context.Context, req ExecRequest, outputSen
 	}
 
 	nsCfg := e.buildNsjailConfig(req)
-	args := nsCfg.ScriptArgs(req.TaskID, req.Interpreter, req.Script)
+	scriptPath, err := nsCfg.WriteScriptFile(req.TaskID, req.Script)
+	if err != nil {
+		return nil, fmt.Errorf("write script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	args := nsCfg.ScriptArgs(req.TaskID, req.Interpreter, scriptPath)
 	return e.run(ctx, req, nsCfg, args, outputSender)
 }
 
 // run is the core execution path: sets up cgroup, creates streamer, runs nsjail,
 // captures output, reads stats, and audit logs.
 func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig, nsjailArgs []string, outputSender OutputSender) (*ExecResult, error) {
+	select {
+	case e.sem <- struct{}{}:
+		defer func() { <-e.sem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	taskID := req.TaskID
 	startTime := time.Now()
 
@@ -233,8 +260,9 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig,
 		}
 	}
 
-	// Check for truncation.
-	if stdoutBuf.Len() >= maxOutputBytes || stderrBuf.Len() >= maxOutputBytes {
+	// Check for truncation — each streamer gets maxOutputBytes/2.
+	streamLimit := maxOutputBytes / 2
+	if stdoutBuf.Len() >= streamLimit || stderrBuf.Len() >= streamLimit {
 		result.Truncated = true
 	}
 

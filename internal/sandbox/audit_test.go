@@ -11,7 +11,7 @@ import (
 func TestAuditLoggerLogExecution(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf).With().Timestamp().Logger()
-	al := NewAuditLogger(logger)
+	al := NewAuditLogger(logger, "")
 
 	al.LogExecution(AuditEvent{
 		TaskID:      "task-001",
@@ -40,7 +40,7 @@ func TestAuditLoggerLogExecution(t *testing.T) {
 func TestAuditLoggerLogExecutionWithError(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf).With().Timestamp().Logger()
-	al := NewAuditLogger(logger)
+	al := NewAuditLogger(logger, "")
 
 	al.LogExecution(AuditEvent{
 		TaskID:  "task-002",
@@ -56,7 +56,7 @@ func TestAuditLoggerLogExecutionWithError(t *testing.T) {
 func TestAuditLoggerLogExecutionNonZeroExit(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf).With().Timestamp().Logger()
-	al := NewAuditLogger(logger)
+	al := NewAuditLogger(logger, "")
 
 	al.LogExecution(AuditEvent{
 		TaskID:   "task-003",

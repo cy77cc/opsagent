@@ -1,6 +1,8 @@
 package sandbox
 
 import (
+	"io"
+	"os"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -26,13 +28,38 @@ type AuditEvent struct {
 // AuditLogger wraps a zerolog.Logger for sandbox audit events.
 type AuditLogger struct {
 	logger zerolog.Logger
+	closer io.Closer
 }
 
 // NewAuditLogger creates an AuditLogger backed by the provided zerolog.Logger.
-func NewAuditLogger(logger zerolog.Logger) *AuditLogger {
-	return &AuditLogger{
-		logger: logger.With().Str("component", "sandbox-audit").Logger(),
+// If logPath is non-empty, audit events are also written to that file.
+func NewAuditLogger(logger zerolog.Logger, logPath string) *AuditLogger {
+	base := logger.With().Str("component", "sandbox-audit")
+
+	if logPath != "" {
+		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err == nil {
+			multi := zerolog.MultiLevelWriter(logger, f)
+			return &AuditLogger{
+				logger: zerolog.New(multi).With().Str("component", "sandbox-audit").Logger(),
+				closer: f,
+			}
+		}
+		// Fall through to stderr-only on error.
+		logger.Warn().Err(err).Str("path", logPath).Msg("failed to open audit log file")
 	}
+
+	return &AuditLogger{
+		logger: base.Logger(),
+	}
+}
+
+// Close closes the underlying file writer, if any.
+func (al *AuditLogger) Close() error {
+	if al.closer != nil {
+		return al.closer.Close()
+	}
+	return nil
 }
 
 // LogExecution records a sandbox execution event with the appropriate log level.

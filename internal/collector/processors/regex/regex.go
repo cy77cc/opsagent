@@ -40,6 +40,47 @@ func New(cfg Config) (*Processor, error) {
 	return &Processor{rules: cfg.Tags}, nil
 }
 
+// Init parses configuration from a map (e.g. from YAML unmarshaling) and
+// compiles regex patterns. Each entry in "tags" is expected to be a map
+// with "key", "pattern", and "replacement" fields.
+func (p *Processor) Init(cfg map[string]interface{}) error {
+	raw, ok := cfg["tags"]
+	if !ok {
+		return nil
+	}
+	tagList, ok := raw.([]interface{})
+	if !ok {
+		return fmt.Errorf("regex: \"tags\" must be a list, got %T", raw)
+	}
+
+	rules := make([]Rule, 0, len(tagList))
+	for i, entry := range tagList {
+		tagMap, ok := entry.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("regex: tag entry %d must be a map, got %T", i, entry)
+		}
+		key, _ := tagMap["key"].(string)
+		if key == "" {
+			return fmt.Errorf("regex: tag entry %d: key must not be empty", i)
+		}
+		pattern, _ := tagMap["pattern"].(string)
+		replacement, _ := tagMap["replacement"].(string)
+
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("regex: tag entry %d: invalid pattern %q: %w", i, pattern, err)
+		}
+		rules = append(rules, Rule{
+			Key:         key,
+			Pattern:     pattern,
+			Replacement: replacement,
+			compiled:    re,
+		})
+	}
+	p.rules = rules
+	return nil
+}
+
 // Apply applies regex replacements to metric tag values.
 func (p *Processor) Apply(in []*collector.Metric) []*collector.Metric {
 	for _, m := range in {
@@ -68,8 +109,6 @@ func (p *Processor) SampleConfig() string {
 
 func init() {
 	collector.RegisterProcessor("regex", func() collector.Processor {
-		// Return a default-configured processor; real usage would load config.
-		p, _ := New(Config{})
-		return p
+		return &Processor{}
 	})
 }

@@ -21,7 +21,7 @@ type mockOutput struct {
 }
 
 func (m *mockOutput) Init(_ map[string]interface{}) error { return nil }
-func (m *mockOutput) Write(_ []Metric) error              { return nil }
+func (m *mockOutput) Write(_ context.Context, _ []Metric) error { return nil }
 func (m *mockOutput) Close() error                        { return nil }
 func (m *mockOutput) SampleConfig() string                { return "" }
 
@@ -158,13 +158,15 @@ func TestDefaultRegistryConvenience(t *testing.T) {
 // nopProcessor is a test helper.
 type nopProcessor struct{}
 
-func (n *nopProcessor) Apply(in []*Metric) []*Metric { return in }
-func (n *nopProcessor) SampleConfig() string          { return "" }
+func (n *nopProcessor) Init(_ map[string]interface{}) error  { return nil }
+func (n *nopProcessor) Apply(in []*Metric) []*Metric         { return in }
+func (n *nopProcessor) SampleConfig() string                  { return "" }
 
 // sumAggregator is a test helper.
 type sumAggregator struct{}
 
-func (s *sumAggregator) Add(_ *Metric)       {}
-func (s *sumAggregator) Push(_ Accumulator)   {}
-func (s *sumAggregator) Reset()               {}
-func (s *sumAggregator) SampleConfig() string { return "" }
+func (s *sumAggregator) Init(_ map[string]interface{}) error { return nil }
+func (s *sumAggregator) Add(_ *Metric)                       {}
+func (s *sumAggregator) Push(_ Accumulator)                   {}
+func (s *sumAggregator) Reset()                               {}
+func (s *sumAggregator) SampleConfig() string                 { return "" }

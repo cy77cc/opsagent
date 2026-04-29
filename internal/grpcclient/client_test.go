@@ -85,3 +85,60 @@ func TestClientDefaultConfigNormalization(t *testing.T) {
 		t.Errorf("expected 10, got %d", c.cfg.FlushIntervalSec)
 	}
 }
+
+func TestBuildAgentInfo(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	info := c.buildAgentInfo()
+
+	if info.Hostname == "" {
+		t.Error("expected non-empty hostname")
+	}
+	if info.Os == "" {
+		t.Error("expected non-empty OS")
+	}
+	if info.Arch == "" {
+		t.Error("expected non-empty arch")
+	}
+	if info.CpuCores <= 0 {
+		t.Errorf("expected positive CPU cores, got %d", info.CpuCores)
+	}
+	if info.MemoryBytes <= 0 {
+		t.Errorf("expected positive memory bytes, got %d", info.MemoryBytes)
+	}
+}
+
+func TestBuildTLSCredentials_NoConfig(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	creds, err := c.buildTLSCredentials()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if creds == nil {
+		t.Fatal("expected non-nil credentials")
+	}
+	// Should be insecure when no TLS config is set.
+	if creds.Info().SecurityProtocol != "insecure" {
+		t.Errorf("expected insecure protocol, got %s", creds.Info().SecurityProtocol)
+	}
+}
+
+func TestBuildTLSCredentials_InvalidCAPath(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.CAPath = "/nonexistent/ca.pem"
+	c := NewClient(cfg, zerolog.Nop(), nil)
+	_, err := c.buildTLSCredentials()
+	if err == nil {
+		t.Error("expected error for nonexistent CA file")
+	}
+}
+
+func TestBuildTLSCredentials_InvalidCertPath(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.CertPath = "/nonexistent/cert.pem"
+	cfg.KeyPath = "/nonexistent/key.pem"
+	c := NewClient(cfg, zerolog.Nop(), nil)
+	_, err := c.buildTLSCredentials()
+	if err == nil {
+		t.Error("expected error for nonexistent cert files")
+	}
+}

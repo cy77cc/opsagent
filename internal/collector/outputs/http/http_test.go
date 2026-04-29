@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -99,7 +100,7 @@ func TestHTTPOutput_Write(t *testing.T) {
 		*collector.NewMetric("requests.count", map[string]string{"endpoint": "/api"}, map[string]interface{}{"value": int64(100)}, collector.Counter, now),
 	}
 
-	if err := h.Write(metrics); err != nil {
+	if err := h.Write(context.Background(), metrics); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
@@ -150,7 +151,7 @@ func TestHTTPOutput_RetryOn5xx(t *testing.T) {
 		*collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": 1.0}, collector.Gauge, now),
 	}
 
-	if err := h.Write(metrics); err != nil {
+	if err := h.Write(context.Background(), metrics); err != nil {
 		t.Fatalf("Write() should succeed after retries, got error: %v", err)
 	}
 
@@ -182,7 +183,7 @@ func TestHTTPOutput_RetryExhaustion(t *testing.T) {
 		*collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": 1.0}, collector.Gauge, now),
 	}
 
-	err := h.Write(metrics)
+	err := h.Write(context.Background(), metrics)
 	if err == nil {
 		t.Fatal("Write() should fail after retry exhaustion")
 	}
@@ -227,7 +228,7 @@ func TestHTTPOutput_Batching(t *testing.T) {
 		metrics[i] = *collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": float64(i)}, collector.Gauge, now)
 	}
 
-	if err := h.Write(metrics); err != nil {
+	if err := h.Write(context.Background(), metrics); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 

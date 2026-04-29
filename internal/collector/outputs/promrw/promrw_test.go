@@ -1,6 +1,7 @@
 package promrw
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -96,7 +97,7 @@ func TestPromRWOutput_Write(t *testing.T) {
 		*collector.NewMetric("requests.count", map[string]string{"endpoint": "/api"}, map[string]interface{}{"value": int64(100)}, collector.Counter, now),
 	}
 
-	if err := p.Write(metrics); err != nil {
+	if err := p.Write(context.Background(), metrics); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
@@ -104,8 +105,8 @@ func TestPromRWOutput_Write(t *testing.T) {
 	defer mu.Unlock()
 
 	// Check headers
-	if headers.Get("Content-Type") != "application/x-protobuf" {
-		t.Errorf("expected Content-Type application/x-protobuf, got %s", headers.Get("Content-Type"))
+	if headers.Get("Content-Type") != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", headers.Get("Content-Type"))
 	}
 	if headers.Get("X-Prometheus-Remote-Write-Version") != "0.1.0" {
 		t.Errorf("expected X-Prometheus-Remote-Write-Version 0.1.0, got %s", headers.Get("X-Prometheus-Remote-Write-Version"))
@@ -157,7 +158,7 @@ func TestPromRWOutput_EmptyMetrics(t *testing.T) {
 		t.Fatalf("Init() error: %v", err)
 	}
 
-	if err := p.Write([]collector.Metric{}); err != nil {
+	if err := p.Write(context.Background(), []collector.Metric{}); err != nil {
 		t.Fatalf("Write() should not error for empty metrics, got: %v", err)
 	}
 }
@@ -192,7 +193,7 @@ func TestPromRWOutput_LabelSorting(t *testing.T) {
 		now,
 	)
 
-	if err := p.Write([]collector.Metric{*m}); err != nil {
+	if err := p.Write(context.Background(), []collector.Metric{*m}); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
@@ -236,7 +237,7 @@ func TestPromRWOutput_ServerError(t *testing.T) {
 		*collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": 1.0}, collector.Gauge, now),
 	}
 
-	err := p.Write(metrics)
+	err := p.Write(context.Background(), metrics)
 	if err == nil {
 		t.Error("Write() should error on 5xx response")
 	}
@@ -281,7 +282,7 @@ func TestPromRWOutput_Timestamp(t *testing.T) {
 	ts2 := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 	m := collector.NewMetric("test", map[string]string{}, map[string]interface{}{"value": 42.0}, collector.Gauge, ts2)
 
-	if err := p.Write([]collector.Metric{*m}); err != nil {
+	if err := p.Write(context.Background(), []collector.Metric{*m}); err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 

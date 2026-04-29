@@ -2,13 +2,19 @@ package grpcclient
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
+	"os"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/shirou/gopsutil/v4/mem"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/cy77cc/opsagent/internal/collector"
@@ -45,7 +51,6 @@ type Client struct {
 	cfg       Config
 	logger    zerolog.Logger
 	receiver  *Receiver
-	sender    *Sender
 	cache     *MetricCache
 	conn      *grpc.ClientConn
 	stream    pb.AgentService_ConnectClient
@@ -76,7 +81,6 @@ func NewClient(cfg Config, logger zerolog.Logger, receiver *Receiver) *Client {
 		cfg:      cfg,
 		logger:   logger,
 		receiver: receiver,
-		sender:   &Sender{},
 		cache:    NewMetricCache(cfg.CacheMaxSize),
 	}
 }
@@ -215,10 +219,13 @@ func (c *Client) connectLoop(ctx context.Context) {
 func (c *Client) connect(ctx context.Context) error {
 	c.logger.Info().Str("addr", c.cfg.ServerAddr).Msg("connecting to platform")
 
-	// TODO: add mTLS credentials from CertPath/KeyPath/CAPath.
-	conn, err := grpc.DialContext(ctx, c.cfg.ServerAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
+	creds, err := c.buildTLSCredentials()
+	if err != nil {
+		return fmt.Errorf("build TLS credentials: %w", err)
+	}
+
+	conn, err := grpc.NewClient(c.cfg.ServerAddr,
+		grpc.WithTransportCredentials(creds),
 	)
 	if err != nil {
 		return fmt.Errorf("dial %s: %w", c.cfg.ServerAddr, err)
@@ -343,9 +350,53 @@ func (c *Client) replayCache() {
 
 // buildAgentInfo constructs the AgentInfo protobuf from system data.
 func (c *Client) buildAgentInfo() *pb.AgentInfo {
-	return &pb.AgentInfo{
-		Hostname: c.cfg.AgentID, // placeholder — real impl reads hostname
+	hostname, _ := os.Hostname()
+	var memBytes int64
+	if v, err := mem.VirtualMemory(); err == nil {
+		memBytes = int64(v.Total)
 	}
+	return &pb.AgentInfo{
+		Hostname:    hostname,
+		Os:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+		CpuCores:    int32(runtime.NumCPU()),
+		MemoryBytes: memBytes,
+	}
+}
+
+// buildTLSCredentials creates transport credentials based on the mTLS configuration.
+// If no client certs are configured, it falls back to system CA for server verification.
+// If all cert paths are empty, it returns insecure credentials for dev environments.
+func (c *Client) buildTLSCredentials() (credentials.TransportCredentials, error) {
+	if c.cfg.CertPath == "" && c.cfg.KeyPath == "" && c.cfg.CAPath == "" {
+		return insecure.NewCredentials(), nil
+	}
+
+	tlsCfg := &tls.Config{}
+
+	// Load client certificate if provided.
+	if c.cfg.CertPath != "" && c.cfg.KeyPath != "" {
+		cert, err := tls.LoadX509KeyPair(c.cfg.CertPath, c.cfg.KeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("load client cert: %w", err)
+		}
+		tlsCfg.Certificates = []tls.Certificate{cert}
+	}
+
+	// Load custom CA pool if provided.
+	if c.cfg.CAPath != "" {
+		caCert, err := os.ReadFile(c.cfg.CAPath)
+		if err != nil {
+			return nil, fmt.Errorf("read CA file: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("failed to parse CA certificate")
+		}
+		tlsCfg.RootCAs = pool
+	}
+
+	return credentials.NewTLS(tlsCfg), nil
 }
 
 // closeConn closes the gRPC connection if open.

@@ -1626,7 +1626,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\aCOUNTER\x10\x01\x12\r\n" +
 	"\tHISTOGRAM\x10\x022P\n" +
 	"\fAgentService\x12@\n" +
-	"\aConnect\x12\x16.opsagent.AgentMessage\x1a\x19.opsagent.PlatformMessage(\x010\x01B$Z\"opsagent/internal/grpcclient/protob\x06proto3"
+	"\aConnect\x12\x16.opsagent.AgentMessage\x1a\x19.opsagent.PlatformMessage(\x010\x01B6Z4github.com/cy77cc/opsagent/internal/grpcclient/protob\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once

@@ -1,6 +1,6 @@
 syntax = "proto3";
 package opsagent;
-option go_package = "opsagent/internal/grpcclient/proto";
+option go_package = "github.com/cy77cc/opsagent/internal/grpcclient/proto";
 
 service AgentService {
   rpc Connect(stream AgentMessage) returns (stream PlatformMessage);

@@ -2,8 +2,11 @@ package sandbox
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -156,5 +159,85 @@ func TestExecutorDefaults(t *testing.T) {
 	}
 	if executor.cfg.TimeoutSec != 30 {
 		t.Errorf("default TimeoutSec = %d, want 30", executor.cfg.TimeoutSec)
+	}
+}
+
+func TestExecutorConcurrencyLimit(t *testing.T) {
+	logger := zerolog.Nop()
+	cfg := Config{MaxConcurrentTasks: 2}
+	exec := NewExecutor(cfg, logger)
+
+	if cap(exec.sem) != 2 {
+		t.Errorf("semaphore capacity = %d, want 2", cap(exec.sem))
+	}
+}
+
+func TestExecutorClose(t *testing.T) {
+	logger := zerolog.Nop()
+	exec := NewExecutor(Config{}, logger)
+	if err := exec.Close(); err != nil {
+		t.Errorf("Close() error: %v", err)
+	}
+}
+
+func TestWriteScriptFile(t *testing.T) {
+	cfg := &NsjailConfig{}
+	path, err := cfg.WriteScriptFile("test-001", "#!/bin/bash\necho hello")
+	if err != nil {
+		t.Fatalf("WriteScriptFile() error: %v", err)
+	}
+	defer os.Remove(path)
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read error: %v", err)
+	}
+	if string(content) != "#!/bin/bash\necho hello" {
+		t.Errorf("content = %q, want script content", string(content))
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat error: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("permissions = %o, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestAuditLoggerWithFile(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "audit-*.log")
+	if err != nil {
+		t.Fatalf("temp file error: %v", err)
+	}
+	f.Close()
+
+	logger := zerolog.Nop()
+	al := NewAuditLogger(logger, f.Name())
+	defer al.Close()
+
+	al.LogExecution(AuditEvent{
+		TaskID:   "file-test",
+		Command:  "echo",
+		ExitCode: 0,
+		Duration: time.Millisecond,
+	})
+
+	data, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("read error: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("expected data written to audit log file")
+	}
+	if !strings.Contains(string(data), "file-test") {
+		t.Error("expected task_id in audit log file")
+	}
+}
+
+func TestAuditLoggerClose(t *testing.T) {
+	al := NewAuditLogger(zerolog.Nop(), "")
+	if err := al.Close(); err != nil {
+		t.Errorf("Close() error: %v", err)
 	}
 }

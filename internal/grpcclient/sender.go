@@ -51,11 +51,8 @@ func (r *ExecResult) ToProto() *pb.ExecResult {
 	return pr
 }
 
-// Sender builds AgentMessage protobuf payloads.
-type Sender struct{}
-
 // metricsToBatch converts a slice of collector metrics to a MetricBatch proto.
-func (s *Sender) metricsToBatch(metrics []*collector.Metric) *pb.MetricBatch {
+func metricsToBatch(metrics []*collector.Metric) *pb.MetricBatch {
 	pbMetrics := make([]*pb.Metric, 0, len(metrics))
 	for _, m := range metrics {
 		pbMetrics = append(pbMetrics, m.ToProto())
@@ -79,10 +76,9 @@ func NewHeartbeat(agentID, status string, info *pb.AgentInfo) *pb.AgentMessage {
 
 // NewMetricBatchMessage wraps metrics into an AgentMessage.
 func NewMetricBatchMessage(metrics []*collector.Metric) *pb.AgentMessage {
-	s := &Sender{}
 	return &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Metrics{
-			Metrics: s.metricsToBatch(metrics),
+			Metrics: metricsToBatch(metrics),
 		},
 	}
 }

@@ -9,8 +9,6 @@ import (
 )
 
 func TestSenderBatchToProto(t *testing.T) {
-	s := &Sender{}
-
 	m1 := collector.NewMetric(
 		"cpu_usage",
 		map[string]string{"host": "web-1"},
@@ -26,7 +24,7 @@ func TestSenderBatchToProto(t *testing.T) {
 		time.UnixMilli(1700000001000),
 	)
 
-	batch := s.metricsToBatch([]*collector.Metric{m1, m2})
+	batch := metricsToBatch([]*collector.Metric{m1, m2})
 
 	if len(batch.Metrics) != 2 {
 		t.Fatalf("expected 2 metrics in batch, got %d", len(batch.Metrics))
@@ -43,8 +41,7 @@ func TestSenderBatchToProto(t *testing.T) {
 }
 
 func TestSenderEmptyBatch(t *testing.T) {
-	s := &Sender{}
-	batch := s.metricsToBatch(nil)
+	batch := metricsToBatch(nil)
 	if batch == nil {
 		t.Fatal("expected non-nil batch")
 	}

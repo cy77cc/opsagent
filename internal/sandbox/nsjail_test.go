@@ -80,11 +80,11 @@ func TestNsjailConfigCommand(t *testing.T) {
 
 func TestNsjailConfigScript(t *testing.T) {
 	cfg := NsjailConfig{TimeLimit: 10, MemoryMB: 64, WorkDir: "/work"}
-	args := cfg.ScriptArgs("task-002", "bash", "echo hello")
+	args := cfg.ScriptArgs("task-002", "bash", "/tmp/script.sh")
 	argStr := strings.Join(args, " ")
 
-	if !strings.Contains(argStr, "/bin/bash -c echo hello") {
-		t.Errorf("expected '/bin/bash -c echo hello', got: %s", argStr)
+	if !strings.Contains(argStr, "/bin/bash /tmp/script.sh") {
+		t.Errorf("expected '/bin/bash /tmp/script.sh', got: %s", argStr)
 	}
 	if !strings.Contains(argStr, "--name=sandbox-task-002") {
 		t.Errorf("expected '--name=sandbox-task-002' in args, got: %s", argStr)

@@ -1,6 +1,8 @@
 package tagger
 
 import (
+	"fmt"
+
 	"github.com/cy77cc/opsagent/internal/collector"
 )
 
@@ -37,6 +39,47 @@ func New(cfg Config) *Processor {
 	}
 }
 
+// Init parses configuration from a map (e.g. from YAML unmarshaling).
+// Expects "tags" as a map[string]interface{} and "conditions" as []interface{}
+// where each entry is a map with "tag", "value", and "when_name" fields.
+func (p *Processor) Init(cfg map[string]interface{}) error {
+	// Parse static tags.
+	if rawTags, ok := cfg["tags"]; ok {
+		tagsMap, ok := rawTags.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("tagger: \"tags\" must be a map, got %T", rawTags)
+		}
+		p.staticTags = make(map[string]string, len(tagsMap))
+		for k, v := range tagsMap {
+			p.staticTags[k] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	// Parse conditions.
+	if rawConds, ok := cfg["conditions"]; ok {
+		condList, ok := rawConds.([]interface{})
+		if !ok {
+			return fmt.Errorf("tagger: \"conditions\" must be a list, got %T", rawConds)
+		}
+		p.conditions = make([]Condition, 0, len(condList))
+		for i, entry := range condList {
+			condMap, ok := entry.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("tagger: condition entry %d must be a map, got %T", i, entry)
+			}
+			tag, _ := condMap["tag"].(string)
+			value, _ := condMap["value"].(string)
+			whenName, _ := condMap["when_name"].(string)
+			p.conditions = append(p.conditions, Condition{
+				Tag:      tag,
+				Value:    value,
+				WhenName: whenName,
+			})
+		}
+	}
+	return nil
+}
+
 // Apply adds static tags to all metrics and conditional tags when metric name matches.
 func (p *Processor) Apply(in []*collector.Metric) []*collector.Metric {
 	for _, m := range in {
@@ -70,6 +113,6 @@ func (p *Processor) SampleConfig() string {
 
 func init() {
 	collector.RegisterProcessor("tagger", func() collector.Processor {
-		return New(Config{})
+		return &Processor{}
 	})
 }

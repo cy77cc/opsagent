@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
+APP_NAME="${APP_NAME:-opsagent}"
+
 PASS=0
 FAIL=0
 SKIP=0
@@ -35,7 +37,7 @@ skip_step() {
 }
 
 # 1. Build
-run_step "Build" go build -o bin/opsagent ./cmd/agent
+run_step "Build" go build -o "bin/${APP_NAME}" ./cmd/agent
 
 # 2. Unit tests
 run_step "Unit Tests" go test ./... -race -count=1 -timeout 60s

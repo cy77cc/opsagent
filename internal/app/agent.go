@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,6 +40,9 @@ import (
 	_ "github.com/cy77cc/opsagent/internal/collector/processors/tagger"
 )
 
+// Version is set at build time via ldflags.
+var Version = "dev"
+
 // Agent wires collection, reporting, local API server, and task dispatch.
 type Agent struct {
 	cfg           *config.Config
@@ -52,6 +56,7 @@ type Agent struct {
 	grpcClient    *grpcclient.Client
 	sandboxExec   *sandbox.Executor
 	startedAt     time.Time
+	activeTasks   sync.Map
 }
 
 // NewRootCommand creates the CLI entrypoint.
@@ -62,6 +67,15 @@ func NewRootCommand() *cobra.Command {
 		Use:   "opsagent",
 		Short: "Node metrics and remote exec agent",
 	}
+
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(_ *cobra.Command, _ []string) {
+			fmt.Println("opsagent", Version)
+		},
+	}
+	rootCmd.AddCommand(versionCmd)
 
 	runCmd := &cobra.Command{
 		Use:   "run",
@@ -149,10 +163,12 @@ func NewAgent(cfg *config.Config, log zerolog.Logger) (*Agent, error) {
 	var sandboxExec *sandbox.Executor
 	if cfg.Sandbox.Enabled {
 		sandboxExec = sandbox.NewExecutor(sandbox.Config{
-			NsjailPath: cfg.Sandbox.NsjailPath,
-			WorkDir:    cfg.Sandbox.BaseWorkdir,
-			CgroupBase: cfg.Sandbox.CgroupBasePath,
-			TimeoutSec: cfg.Sandbox.DefaultTimeoutSeconds,
+			NsjailPath:         cfg.Sandbox.NsjailPath,
+			WorkDir:            cfg.Sandbox.BaseWorkdir,
+			CgroupBase:         cfg.Sandbox.CgroupBasePath,
+			TimeoutSec:         cfg.Sandbox.DefaultTimeoutSeconds,
+			MaxConcurrentTasks: cfg.Sandbox.MaxConcurrentTasks,
+			AuditLogPath:       cfg.Sandbox.AuditLogPath,
 			Policy: sandbox.Policy{
 				AllowedCommands:     cfg.Sandbox.Policy.AllowedCommands,
 				BlockedCommands:     cfg.Sandbox.Policy.BlockedCommands,
@@ -225,7 +241,49 @@ func buildScheduler(cfg *config.Config, log zerolog.Logger) (*collector.Schedule
 		return nil, nil
 	}
 
-	return collector.NewScheduler(scheduledInputs, log), nil
+	// Build processors from config.
+	var processors []collector.Processor
+	for _, pCfg := range cfg.Collector.Processors {
+		factory, ok := collector.DefaultRegistry.GetProcessor(pCfg.Type)
+		if !ok {
+			return nil, fmt.Errorf("unknown processor type: %q", pCfg.Type)
+		}
+		p := factory()
+		if err := p.Init(pCfg.Config); err != nil {
+			return nil, fmt.Errorf("init processor %q: %w", pCfg.Type, err)
+		}
+		processors = append(processors, p)
+	}
+
+	// Build aggregators from config.
+	var aggregators []collector.Aggregator
+	for _, aCfg := range cfg.Collector.Aggregators {
+		factory, ok := collector.DefaultRegistry.GetAggregator(aCfg.Type)
+		if !ok {
+			return nil, fmt.Errorf("unknown aggregator type: %q", aCfg.Type)
+		}
+		agg := factory()
+		if err := agg.Init(aCfg.Config); err != nil {
+			return nil, fmt.Errorf("init aggregator %q: %w", aCfg.Type, err)
+		}
+		aggregators = append(aggregators, agg)
+	}
+
+	// Build outputs from config.
+	var outputs []collector.Output
+	for _, oCfg := range cfg.Collector.Outputs {
+		factory, ok := collector.DefaultRegistry.GetOutput(oCfg.Type)
+		if !ok {
+			return nil, fmt.Errorf("unknown output type: %q", oCfg.Type)
+		}
+		out := factory()
+		if err := out.Init(oCfg.Config); err != nil {
+			return nil, fmt.Errorf("init output %q: %w", oCfg.Type, err)
+		}
+		outputs = append(outputs, out)
+	}
+
+	return collector.NewScheduler(scheduledInputs, processors, aggregators, outputs, log), nil
 }
 
 func newReporter(cfg *config.Config, log zerolog.Logger) (reporter.Reporter, error) {
@@ -336,12 +394,15 @@ func (a *Agent) collectAndReport(ctx context.Context) error {
 		return errors.New("collector returned no payload")
 	}
 
-	latest := metrics[0]
-	a.server.SetLatestMetric(latest)
-	if reportErr := a.reporter.Report(ctx, latest); reportErr != nil {
-		a.log.Error().Err(reportErr).Msg("reporter failed")
-		return reportErr
+	// Report all collected metric payloads.
+	for _, mp := range metrics {
+		if reportErr := a.reporter.Report(ctx, mp); reportErr != nil {
+			a.log.Error().Err(reportErr).Str("collector", mp.Collector).Msg("reporter failed")
+			return reportErr
+		}
 	}
+	// Update the server with the latest payload.
+	a.server.SetLatestMetric(metrics[len(metrics)-1])
 	return err
 }
 
@@ -354,11 +415,15 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 		if len(metrics) == 0 {
 			return nil, errors.New("no metric payload")
 		}
-		a.server.SetLatestMetric(metrics[0])
-		return metrics[0], err
+		a.server.SetLatestMetric(metrics[len(metrics)-1])
+		return metrics, err
 	})
 
 	dispatcher.Register(task.TypeExecCommand, func(ctx context.Context, t task.AgentTask) (any, error) {
+		taskCtx, cancel := context.WithCancel(ctx)
+		a.activeTasks.Store(t.TaskID, cancel)
+		defer a.activeTasks.Delete(t.TaskID)
+
 		cmdVal, ok := t.Payload["command"].(string)
 		if !ok || cmdVal == "" {
 			return nil, fmt.Errorf("task payload.command is required")
@@ -393,7 +458,7 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 			}
 		}
 
-		return a.executor.Execute(ctx, executor.Request{
+		return a.executor.Execute(taskCtx, executor.Request{
 			Command:        cmdVal,
 			Args:           args,
 			TimeoutSeconds: timeoutSeconds,
@@ -427,6 +492,10 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 
 	// Sandbox exec task handler.
 	dispatcher.Register(task.TypeSandboxExec, func(ctx context.Context, t task.AgentTask) (any, error) {
+		taskCtx, cancel := context.WithCancel(ctx)
+		a.activeTasks.Store(t.TaskID, cancel)
+		defer a.activeTasks.Delete(t.TaskID)
+
 		if a.sandboxExec == nil {
 			return nil, fmt.Errorf("sandbox executor is not enabled")
 		}
@@ -469,14 +538,14 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 		}
 
 		if scriptVal != "" {
-			result, err := a.sandboxExec.ExecuteScript(ctx, req, nil)
+			result, err := a.sandboxExec.ExecuteScript(taskCtx, req, nil)
 			if err != nil {
 				return nil, fmt.Errorf("sandbox script exec: %w", err)
 			}
 			return result, nil
 		}
 
-		result, err := a.sandboxExec.ExecuteCommand(ctx, req, nil)
+		result, err := a.sandboxExec.ExecuteCommand(taskCtx, req, nil)
 		if err != nil {
 			return nil, fmt.Errorf("sandbox command exec: %w", err)
 		}
@@ -572,9 +641,15 @@ func (a *Agent) registerGRPCHandlers(recv *grpcclient.Receiver) {
 		return nil
 	})
 
-	// Cancel handler: placeholder.
+	// Cancel handler: cancel active task by ID.
 	recv.SetCancelHandler(func(_ context.Context, job *pb.CancelJob) error {
-		a.log.Info().Str("task_id", job.GetTaskId()).Msg("cancel job received (no-op)")
+		taskID := job.GetTaskId()
+		if cancelFn, ok := a.activeTasks.Load(taskID); ok {
+			cancelFn.(context.CancelFunc)()
+			a.log.Info().Str("task_id", taskID).Msg("cancel job executed")
+		} else {
+			a.log.Warn().Str("task_id", taskID).Msg("cancel job: task not found")
+		}
 		return nil
 	})
 
