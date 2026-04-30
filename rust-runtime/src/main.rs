@@ -13,6 +13,7 @@ use tokio::net::UnixListener;
 use tracing::{error, info};
 
 use crate::chunking::chunk_output;
+use crate::handlers::conn_analyze::ConnAnalyzePlugin;
 use crate::handlers::fs_scan::FsScanPlugin;
 use crate::handlers::log_parse::LogParsePlugin;
 use crate::handlers::text_process::TextProcessPlugin;
@@ -52,6 +53,7 @@ fn build_registry() -> PluginRegistry {
     reg.register(Box::new(FsScanPlugin::new()));
     reg.register(Box::new(LogParsePlugin));
     reg.register(Box::new(TextProcessPlugin));
+    reg.register(Box::new(ConnAnalyzePlugin));
     reg
 }
 
