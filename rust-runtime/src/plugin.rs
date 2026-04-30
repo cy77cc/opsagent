@@ -3,6 +3,7 @@ use serde_json::Value;
 
 use crate::error::PluginError;
 
+#[derive(Debug)]
 pub struct PluginResult {
     pub status: String,
     pub summary: Option<Value>,
