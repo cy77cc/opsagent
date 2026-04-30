@@ -111,5 +111,20 @@ collector:
       config:
         # states: ["ESTABLISHED", "LISTEN"]
   processors: []
+    # Example: delta/rate processor for disk IO counters
+    # - type: delta
+    #   config:
+    #     fields: ["read_bytes", "write_bytes"]
+    #     output: "rate"
+    #     max_stale_seconds: 300
   aggregators: []
+    # Example: min/max aggregator for CPU usage
+    # - type: minmax
+    #   config:
+    #     fields: ["cpu_usage_percent"]
+    # Example: percentile aggregator for latency
+    # - type: percentile
+    #   config:
+    #     fields: ["response_time_ms"]
+    #     percentiles: [50, 95, 99]
   outputs: []

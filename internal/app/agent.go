@@ -27,6 +27,8 @@ import (
 
 	// Blank imports to trigger init() plugin registration.
 	_ "github.com/cy77cc/opsagent/internal/collector/aggregators/avg"
+	_ "github.com/cy77cc/opsagent/internal/collector/aggregators/minmax"
+	_ "github.com/cy77cc/opsagent/internal/collector/aggregators/percentile"
 	_ "github.com/cy77cc/opsagent/internal/collector/aggregators/sum"
 	_ "github.com/cy77cc/opsagent/internal/collector/inputs/cpu"
 	_ "github.com/cy77cc/opsagent/internal/collector/inputs/disk"
@@ -42,6 +44,7 @@ import (
 	_ "github.com/cy77cc/opsagent/internal/collector/outputs/prometheus"
 	_ "github.com/cy77cc/opsagent/internal/collector/outputs/promrw"
 	_ "github.com/cy77cc/opsagent/internal/collector/processors/regex"
+	_ "github.com/cy77cc/opsagent/internal/collector/processors/delta"
 	_ "github.com/cy77cc/opsagent/internal/collector/processors/tagger"
 )
 
