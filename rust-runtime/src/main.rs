@@ -13,6 +13,7 @@ use tokio::net::UnixListener;
 use tracing::{error, info};
 
 use crate::chunking::chunk_output;
+use crate::handlers::fs_scan::FsScanPlugin;
 use crate::handlers::log_parse::LogParsePlugin;
 use crate::handlers::text_process::TextProcessPlugin;
 use crate::protocol::{RpcRequest, RpcResponse, TaskResponse, TaskStats};
@@ -48,6 +49,7 @@ async fn main() -> Result<()> {
 
 fn build_registry() -> PluginRegistry {
     let mut reg = PluginRegistry::new();
+    reg.register(Box::new(FsScanPlugin::new()));
     reg.register(Box::new(LogParsePlugin));
     reg.register(Box::new(TextProcessPlugin));
     reg
