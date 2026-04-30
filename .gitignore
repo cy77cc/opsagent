@@ -37,3 +37,6 @@ dist/
 
 # Rust build artifacts
 target/
+
+# Example binaries
+sdk/examples/go-echo/go-echo
