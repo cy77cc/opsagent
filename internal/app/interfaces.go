@@ -21,6 +21,7 @@ type GRPCClient interface {
 	SendExecResult(result *grpcclient.ExecResult)
 	IsConnected() bool
 	HealthStatus() health.Status
+	SetOnStateChange(fn func(connected bool))
 }
 
 // HTTPServer abstracts the local HTTP server for health, metrics, and task APIs.

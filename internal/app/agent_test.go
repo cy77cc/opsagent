@@ -57,6 +57,7 @@ func (m *mockGRPCClient) SendExecOutput(string, string, []byte)     {}
 func (m *mockGRPCClient) SendExecResult(*grpcclient.ExecResult)     {}
 func (m *mockGRPCClient) IsConnected() bool                         { return true }
 func (m *mockGRPCClient) HealthStatus() health.Status               { return health.Status{Status: "connected"} }
+func (m *mockGRPCClient) SetOnStateChange(_ func(connected bool))   {}
 
 func (m *mockGRPCClient) FlushAndStop(_ context.Context, _ string) error {
 	m.stopCalled.Add(1)

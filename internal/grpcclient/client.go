@@ -59,7 +59,8 @@ type Client struct {
 	mu        sync.Mutex
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
-	connected bool
+	connected     bool
+	onStateChange func(connected bool)
 }
 
 // NewClient creates a Client. If logger is nil, a no-op logger is used.
@@ -177,6 +178,13 @@ func (c *Client) IsConnected() bool {
 	return c.connected
 }
 
+// SetOnStateChange registers a callback for connection state changes.
+func (c *Client) SetOnStateChange(fn func(connected bool)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onStateChange = fn
+}
+
 // HealthStatus reports the gRPC client connection health.
 func (c *Client) HealthStatus() health.Status {
 	c.mu.Lock()
@@ -264,7 +272,12 @@ func (c *Client) connect(ctx context.Context) error {
 	c.conn = conn
 	c.stream = stream
 	c.connected = true
+	onStateChange := c.onStateChange
 	c.mu.Unlock()
+
+	if onStateChange != nil {
+		onStateChange(true)
+	}
 
 	c.logger.Info().Msg("connected to platform")
 
@@ -429,8 +442,13 @@ func (c *Client) closeConn() {
 // setConnected updates the connected state.
 func (c *Client) setConnected(v bool) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	wasConnected := c.connected
 	c.connected = v
+	onStateChange := c.onStateChange
+	c.mu.Unlock()
+	if v != wasConnected && onStateChange != nil {
+		onStateChange(v)
+	}
 }
 
 // FlushAndStop drains the cache, sends all metrics, and closes the connection.
