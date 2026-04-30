@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap};
 use std::path::Path;
 use std::time::Instant;
 
@@ -67,11 +68,19 @@ impl Plugin for FsScanPlugin {
             })
             .unwrap_or_default();
 
+        let compiled_patterns: Vec<glob::Pattern> = include_patterns
+            .iter()
+            .map(|pat| {
+                glob::Pattern::new(pat)
+                    .map_err(|_| PluginError::Config(format!("invalid glob pattern: {}", pat)))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
         let started = Instant::now();
         let mut total_files: u64 = 0;
         let mut total_size: u64 = 0;
         let mut by_extension: HashMap<String, u64> = HashMap::new();
-        let mut largest: Vec<(String, u64)> = Vec::new();
+        let mut largest: BinaryHeap<Reverse<(u64, String)>> = BinaryHeap::new();
 
         for entry in WalkDir::new(root_path)
             .max_depth(max_depth)
@@ -95,14 +104,9 @@ impl Plugin for FsScanPlugin {
 
             let size = metadata.len();
 
-            if !include_patterns.is_empty() {
+            if !compiled_patterns.is_empty() {
                 let file_name = entry.file_name().to_string_lossy();
-                let matched = include_patterns.iter().any(|pat| {
-                    glob::Pattern::new(pat)
-                        .map(|p| p.matches(&file_name))
-                        .unwrap_or(false)
-                });
-                if !matched {
+                if !compiled_patterns.iter().any(|p| p.matches(&file_name)) {
                     continue;
                 }
             }
@@ -126,12 +130,24 @@ impl Plugin for FsScanPlugin {
             }
 
             let path_str = path.to_string_lossy().to_string();
-            largest.push((path_str, size));
-            largest.sort_by(|a, b| b.1.cmp(&a.1));
-            largest.truncate(10);
+            if largest.len() < 10 {
+                largest.push(Reverse((size, path_str)));
+            } else if let Some(Reverse((min_size, _))) = largest.peek() {
+                if size > *min_size {
+                    largest.pop();
+                    largest.push(Reverse((size, path_str)));
+                }
+            }
         }
 
         let scan_duration_ms = started.elapsed().as_millis() as u64;
+
+        let mut largest: Vec<(String, u64)> = largest
+            .into_sorted_vec()
+            .into_iter()
+            .map(|Reverse((size, path))| (path, size))
+            .collect();
+        largest.reverse(); // largest first
 
         let largest_files: Vec<Value> = largest
             .iter()
