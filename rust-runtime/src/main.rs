@@ -1,9 +1,8 @@
+mod chunking;
 mod error;
 mod protocol;
 
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine;
-use protocol::{Chunk, RpcRequest, RpcResponse, RpcError, TaskRequest, TaskResponse, TaskStats};
+use protocol::{RpcRequest, RpcResponse, RpcError, TaskRequest, TaskResponse, TaskStats};
 use serde_json::{json, Value};
 use std::env;
 use std::fs;
@@ -109,15 +108,7 @@ fn execute_task(req: TaskRequest) -> TaskResponse {
         ),
     };
 
-    let chunks = if req.chunking.enabled {
-        chunk_output(&output, req.chunking.max_chunk_bytes, req.chunking.max_total_bytes)
-    } else {
-        vec![Chunk {
-            seq: 1,
-            eof_flag: true,
-            data_b64: BASE64.encode(output.as_bytes()),
-        }]
-    };
+    let chunks = chunking::chunk_output(&output, &req.chunking);
 
     TaskResponse {
         task_id: req.task_id,
@@ -193,36 +184,4 @@ fn handle_text_process(payload: &Value) -> (String, Option<Value>, String) {
             format!("unsupported operation: {}", op),
         ),
     }
-}
-
-fn chunk_output(output: &str, max_chunk_bytes: usize, max_total_bytes: usize) -> Vec<Chunk> {
-    let bytes = output.as_bytes();
-    let mut capped = bytes;
-    if max_total_bytes > 0 && bytes.len() > max_total_bytes {
-        capped = &bytes[..max_total_bytes];
-    }
-
-    if capped.is_empty() {
-        return vec![];
-    }
-
-    let step = if max_chunk_bytes == 0 { capped.len() } else { max_chunk_bytes };
-    let mut chunks = Vec::new();
-    let mut seq = 1usize;
-    let mut idx = 0usize;
-
-    while idx < capped.len() {
-        let end = (idx + step).min(capped.len());
-        let part = &capped[idx..end];
-        let eof_flag = end >= capped.len();
-        chunks.push(Chunk {
-            seq,
-            eof_flag,
-            data_b64: BASE64.encode(part),
-        });
-        seq += 1;
-        idx = end;
-    }
-
-    chunks
 }
