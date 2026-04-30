@@ -32,7 +32,7 @@ type TaskStats struct {
 
 // rpcRequest is the internal JSON-RPC request envelope.
 type rpcRequest struct {
-	ID     int64       `json:"id"`
+	ID     interface{} `json:"id"`
 	Method string      `json:"method"`
 	Params TaskRequest `json:"params"`
 }
@@ -45,7 +45,7 @@ type rpcError struct {
 
 // rpcResponse is the internal JSON-RPC response envelope.
 type rpcResponse struct {
-	ID     int64       `json:"id"`
+	ID     interface{} `json:"id"`
 	Result interface{} `json:"result,omitempty"`
 	Error  *rpcError   `json:"error,omitempty"`
 }

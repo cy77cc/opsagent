@@ -41,7 +41,7 @@ type TaskResponse struct {
 }
 
 type rpcRequest struct {
-	ID     string      `json:"id"`
+	ID     interface{} `json:"id"`
 	Method string      `json:"method"`
 	Params TaskRequest `json:"params"`
 }
@@ -52,7 +52,7 @@ type rpcError struct {
 }
 
 type rpcResponse struct {
-	ID     string        `json:"id"`
+	ID     interface{}   `json:"id"`
 	Result *TaskResponse `json:"result,omitempty"`
 	Error  *rpcError     `json:"error,omitempty"`
 }

@@ -120,8 +120,8 @@ func TestServe_PingPong(t *testing.T) {
 		Method: "ping",
 	})
 
-	if resp.ID != 1 {
-		t.Fatalf("expected id 1, got %d", resp.ID)
+	if resp.ID != float64(1) {
+		t.Fatalf("expected id 1, got %v", resp.ID)
 	}
 	if resp.Error != nil {
 		t.Fatalf("unexpected error: %s", resp.Error.Message)
@@ -159,8 +159,8 @@ func TestServe_ExecuteTask(t *testing.T) {
 		},
 	})
 
-	if resp.ID != 42 {
-		t.Fatalf("expected id 42, got %d", resp.ID)
+	if resp.ID != float64(42) {
+		t.Fatalf("expected id 42, got %v", resp.ID)
 	}
 	if resp.Error != nil {
 		t.Fatalf("unexpected error: %s", resp.Error.Message)

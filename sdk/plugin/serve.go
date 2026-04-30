@@ -174,7 +174,7 @@ func handleConnection(conn net.Conn, handler Handler, logger *slog.Logger) {
 }
 
 // writeResult writes a successful JSON-RPC response to conn.
-func writeResult(conn net.Conn, id int64, result interface{}) {
+func writeResult(conn net.Conn, id interface{}, result interface{}) {
 	resp := rpcResponse{
 		ID:     id,
 		Result: result,
@@ -183,7 +183,7 @@ func writeResult(conn net.Conn, id int64, result interface{}) {
 }
 
 // writeError writes an error JSON-RPC response to conn.
-func writeError(conn net.Conn, id int64, code int, msg string) {
+func writeError(conn net.Conn, id interface{}, code int, msg string) {
 	resp := rpcResponse{
 		ID: id,
 		Error: &rpcError{
