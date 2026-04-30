@@ -1,0 +1,11 @@
+name: rust-audit
+version: "1.0.0"
+description: "System audit plugin for testing the Rust SDK"
+author: "opsagent@example.com"
+runtime: process
+binary_path: ./target/release/rust-audit
+task_types:
+  - audit
+limits:
+  max_memory_mb: 128
+  timeout_seconds: 30
