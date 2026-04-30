@@ -1,5 +1,6 @@
 mod chunking;
 mod error;
+mod plugin;
 mod protocol;
 
 use protocol::{RpcRequest, RpcResponse, RpcError, TaskRequest, TaskResponse, TaskStats};
