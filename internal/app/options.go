@@ -29,3 +29,8 @@ func WithPluginRuntime(r PluginRuntime) Option {
 func WithConfigReloader(r *config.ConfigReloader) Option {
 	return func(a *Agent) { a.configReloader = r }
 }
+
+// WithPluginGateway injects a custom PluginGateway (for testing).
+func WithPluginGateway(gw PluginGateway) Option {
+	return func(a *Agent) { a.pluginGateway = gw }
+}

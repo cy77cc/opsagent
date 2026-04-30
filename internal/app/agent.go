@@ -58,6 +58,7 @@ type Agent struct {
 	server         HTTPServer
 	executor       *executor.Executor
 	pluginRuntime  PluginRuntime
+	pluginGateway  PluginGateway
 	scheduler      Scheduler
 	grpcClient     GRPCClient
 	sandboxExec    *sandbox.Executor
@@ -181,6 +182,20 @@ func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, e
 			ChunkSizeBytes:     cfg.Plugin.ChunkSizeBytes,
 			SandboxProfile:     cfg.Plugin.SandboxProfile,
 		}, log)
+	}
+
+	// Build plugin gateway if enabled and not injected.
+	if a.pluginGateway == nil && cfg.PluginGateway.Enabled {
+		gw := pluginruntime.NewGateway(pluginruntime.GatewayConfig{
+			PluginsDir:          cfg.PluginGateway.PluginsDir,
+			StartupTimeout:      time.Duration(cfg.PluginGateway.StartupTimeoutSeconds) * time.Second,
+			HealthCheckInterval: time.Duration(cfg.PluginGateway.HealthCheckIntervalSecs) * time.Second,
+			MaxRestarts:         cfg.PluginGateway.MaxRestarts,
+			RestartBackoff:      time.Duration(cfg.PluginGateway.RestartBackoffSeconds) * time.Second,
+			FileWatchDebounce:   time.Duration(cfg.PluginGateway.FileWatchDebounceSecs) * time.Second,
+			PluginConfigs:       cfg.PluginGateway.PluginConfigs,
+		}, log)
+		a.pluginGateway = gw
 	}
 
 	// Build collector pipeline scheduler if not injected.
@@ -351,6 +366,12 @@ func (a *Agent) startSubsystems(ctx context.Context) (<-chan []*collector.Metric
 		return nil, nil, fmt.Errorf("start plugin runtime: %w", err)
 	}
 
+	if a.pluginGateway != nil {
+		if err := a.pluginGateway.Start(ctx); err != nil {
+			return nil, nil, fmt.Errorf("start plugin gateway: %w", err)
+		}
+	}
+
 	var pipelineCh <-chan []*collector.Metric
 	if a.scheduler != nil {
 		pipelineCh = a.scheduler.Start(ctx)
@@ -442,6 +463,13 @@ func (a *Agent) shutdown(ctx context.Context) {
 	defer stopCancel()
 	if err := a.pluginRuntime.Stop(stopCtx); err != nil {
 		a.log.Error().Err(err).Msg("failed to stop plugin runtime")
+	}
+
+	// 5b. Stop plugin gateway.
+	if a.pluginGateway != nil {
+		if err := a.pluginGateway.Stop(stopCtx); err != nil {
+			a.log.Error().Err(err).Msg("failed to stop plugin gateway")
+		}
 	}
 
 	// 6. Shutdown HTTP server.
@@ -623,6 +651,26 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 		}
 		return result, nil
 	})
+
+	// Register gateway plugin task handlers dynamically.
+	if gw, ok := a.pluginGateway.(*pluginruntime.Gateway); ok {
+		gw.OnPluginLoaded(func(name string, taskTypes []string) {
+			for _, tt := range taskTypes {
+				fullType := pluginruntime.FullTaskType(name, tt)
+				dispatcher.Register(fullType, func(ctx context.Context, t task.AgentTask) (any, error) {
+					return a.executeGatewayTask(ctx, t)
+				})
+				a.log.Info().Str("task_type", fullType).Msg("registered gateway task handler")
+			}
+		})
+		gw.OnPluginUnloaded(func(name string, taskTypes []string) {
+			for _, tt := range taskTypes {
+				fullType := pluginruntime.FullTaskType(name, tt)
+				dispatcher.Unregister(fullType)
+				a.log.Info().Str("task_type", fullType).Msg("unregistered gateway task handler")
+			}
+		})
+	}
 }
 
 // registerGRPCHandlers wires platform message handlers on the gRPC receiver.
@@ -776,4 +824,31 @@ func (a *Agent) executePluginTask(ctx context.Context, t task.AgentTask, taskTyp
 		return nil, err
 	}
 	return res, nil
+}
+
+func (a *Agent) executeGatewayTask(ctx context.Context, t task.AgentTask) (any, error) {
+	if a.shuttingDown.Load() {
+		return nil, fmt.Errorf("agent is shutting down")
+	}
+	if a.pluginGateway == nil {
+		return nil, fmt.Errorf("plugin gateway is not enabled")
+	}
+
+	taskID := t.TaskID
+	if taskID == "" {
+		taskID = fmt.Sprintf("gw-%d", time.Now().UnixNano())
+	}
+
+	deadline := time.Now().Add(30 * time.Second).UnixMilli()
+	return a.pluginGateway.ExecuteTask(ctx, pluginruntime.TaskRequest{
+		TaskID:     taskID,
+		Type:       t.Type,
+		DeadlineMS: deadline,
+		Payload:    t.Payload,
+		Chunking: pluginruntime.ChunkingConfig{
+			Enabled:       true,
+			MaxChunkBytes: a.cfg.Plugin.ChunkSizeBytes,
+			MaxTotalBytes: a.cfg.Plugin.MaxResultBytes,
+		},
+	})
 }
