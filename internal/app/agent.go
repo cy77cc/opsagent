@@ -176,6 +176,21 @@ func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, e
 		}
 		grpcRecv = grpcclient.NewReceiver(log)
 		a.grpcClient = grpcclient.NewClient(grpcCfg, log, grpcRecv)
+		a.grpcClient.SetOnStateChange(func(connected bool) {
+			if connected {
+				a.auditLog.Log(AuditEvent{
+					EventType: "grpc.connected", Component: "grpcclient",
+					Action: "connect", Status: "success",
+				})
+				a.metricsReg.GRPCConnected.Set(1)
+			} else {
+				a.auditLog.Log(AuditEvent{
+					EventType: "grpc.disconnected", Component: "grpcclient",
+					Action: "disconnect", Status: "success",
+				})
+				a.metricsReg.GRPCConnected.Set(0)
+			}
+		})
 	}
 
 	// Build sandbox executor (only when enabled, always concrete).
@@ -222,6 +237,8 @@ func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, e
 					Scheduler: a.scheduler,
 					PluginRT:  a.pluginRuntime,
 				},
+				Version:   Version,
+				GitCommit: GitCommit,
 			},
 		)
 	}
@@ -502,6 +519,7 @@ func (a *Agent) handlePipelineMetrics(metrics []*collector.Metric) {
 	if len(metrics) == 0 {
 		return
 	}
+	a.metricsReg.IncMetricsCollected()
 	// Send metrics via gRPC client.
 	a.grpcClient.SendMetrics(metrics)
 	a.log.Debug().Int("count", len(metrics)).Msg("pipeline metrics sent via gRPC")
@@ -631,6 +649,7 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 			res, err := a.executePluginTask(ctx, t, taskType)
 			if err != nil {
 				a.metricsReg.IncTasksFailed(taskType, "error")
+				a.metricsReg.IncPluginRequests(taskType, taskType, "error")
 				a.auditLog.Log(AuditEvent{
 					EventType: "task.failed", Component: "dispatcher",
 					Action: taskType, Status: "failure",
@@ -641,6 +660,7 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 			}
 
 			a.metricsReg.IncTasksCompleted()
+			a.metricsReg.IncPluginRequests(taskType, taskType, "success")
 			a.auditLog.Log(AuditEvent{
 				EventType: "task.completed", Component: "dispatcher",
 				Action: taskType, Status: "success",
@@ -774,6 +794,7 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 					res, err := a.executeGatewayTask(ctx, t)
 					if err != nil {
 						a.metricsReg.IncTasksFailed(ft, "error")
+						a.metricsReg.IncPluginRequests(ft, ft, "error")
 						a.auditLog.Log(AuditEvent{
 							EventType: "task.failed", Component: "dispatcher",
 							Action: ft, Status: "failure",
@@ -784,6 +805,7 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 					}
 
 					a.metricsReg.IncTasksCompleted()
+					a.metricsReg.IncPluginRequests(ft, ft, "success")
 					a.auditLog.Log(AuditEvent{
 						EventType: "task.completed", Component: "dispatcher",
 						Action: ft, Status: "success",
