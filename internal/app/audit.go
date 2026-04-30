@@ -2,6 +2,8 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -49,10 +51,13 @@ func (a *AuditLogger) Log(event AuditEvent) {
 	defer a.mu.Unlock()
 	data, err := json.Marshal(event)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "audit: failed to marshal event: %v\n", err)
 		return
 	}
 	data = append(data, '\n')
-	a.logger.Write(data)
+	if _, err := a.logger.Write(data); err != nil {
+		fmt.Fprintf(os.Stderr, "audit: failed to write event: %v\n", err)
+	}
 }
 
 // Close flushes and closes the audit log file.

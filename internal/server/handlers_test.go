@@ -10,9 +10,17 @@ import (
 
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/executor"
+	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/cy77cc/opsagent/internal/task"
 	"github.com/rs/zerolog"
 )
+
+// mockStatuser is a test helper implementing health.Statuser.
+type mockStatuser struct {
+	status health.Status
+}
+
+func (m *mockStatuser) HealthStatus() health.Status { return m.status }
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
@@ -64,6 +72,94 @@ func TestHandleHealthz_Enhanced(t *testing.T) {
 	}
 	if data["status"] == nil {
 		t.Error("expected status field")
+	}
+}
+
+func TestHandleHealthz_StatusLogic(t *testing.T) {
+	tests := []struct {
+		name       string
+		checkers   HealthCheckers
+		wantStatus string
+	}{
+		{
+			name: "all healthy",
+			checkers: HealthCheckers{
+				GRPC:      &mockStatuser{health.Status{Status: "connected"}},
+				Scheduler: &mockStatuser{health.Status{Status: "running"}},
+				PluginRT:  &mockStatuser{health.Status{Status: "running"}},
+			},
+			wantStatus: "healthy",
+		},
+		{
+			name: "core grpc unhealthy",
+			checkers: HealthCheckers{
+				GRPC:      &mockStatuser{health.Status{Status: "disconnected"}},
+				Scheduler: &mockStatuser{health.Status{Status: "running"}},
+				PluginRT:  &mockStatuser{health.Status{Status: "running"}},
+			},
+			wantStatus: "unhealthy",
+		},
+		{
+			name: "core scheduler unhealthy",
+			checkers: HealthCheckers{
+				GRPC:      &mockStatuser{health.Status{Status: "connected"}},
+				Scheduler: &mockStatuser{health.Status{Status: "stopped"}},
+				PluginRT:  &mockStatuser{health.Status{Status: "running"}},
+			},
+			wantStatus: "unhealthy",
+		},
+		{
+			name: "non-core plugin_runtime degraded",
+			checkers: HealthCheckers{
+				GRPC:      &mockStatuser{health.Status{Status: "connected"}},
+				Scheduler: &mockStatuser{health.Status{Status: "running"}},
+				PluginRT:  &mockStatuser{health.Status{Status: "stopped"}},
+			},
+			wantStatus: "degraded",
+		},
+		{
+			name: "nil core checker unhealthy",
+			checkers: HealthCheckers{
+				GRPC:      nil,
+				Scheduler: &mockStatuser{health.Status{Status: "running"}},
+				PluginRT:  &mockStatuser{health.Status{Status: "running"}},
+			},
+			wantStatus: "unhealthy",
+		},
+		{
+			name: "nil non-core checker degraded",
+			checkers: HealthCheckers{
+				GRPC:      &mockStatuser{health.Status{Status: "connected"}},
+				Scheduler: &mockStatuser{health.Status{Status: "running"}},
+				PluginRT:  nil,
+			},
+			wantStatus: "degraded",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(t)
+			s.healthCheckers = tt.checkers
+
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			w := httptest.NewRecorder()
+			s.handleHealthz(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+
+			var resp map[string]any
+			json.NewDecoder(w.Body).Decode(&resp)
+			data, ok := resp["data"].(map[string]any)
+			if !ok {
+				t.Fatal("expected data field")
+			}
+			if data["status"] != tt.wantStatus {
+				t.Errorf("expected status %q, got %v", tt.wantStatus, data["status"])
+			}
+		})
 	}
 }
 

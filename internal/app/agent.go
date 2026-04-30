@@ -3,12 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/cy77cc/opsagent/internal/collector"
@@ -16,14 +13,12 @@ import (
 	"github.com/cy77cc/opsagent/internal/executor"
 	"github.com/cy77cc/opsagent/internal/grpcclient"
 	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
-	"github.com/cy77cc/opsagent/internal/logger"
 	"github.com/cy77cc/opsagent/internal/pluginruntime"
 	"github.com/cy77cc/opsagent/internal/reporter"
 	"github.com/cy77cc/opsagent/internal/sandbox"
 	"github.com/cy77cc/opsagent/internal/server"
 	"github.com/cy77cc/opsagent/internal/task"
 	"github.com/rs/zerolog"
-	"github.com/spf13/cobra"
 
 	// Blank imports to trigger init() plugin registration.
 	_ "github.com/cy77cc/opsagent/internal/collector/aggregators/avg"
@@ -88,81 +83,6 @@ func (a *Agent) IsShutdownComplete() bool {
 	default:
 		return false
 	}
-}
-
-// NewRootCommand creates the CLI entrypoint.
-func NewRootCommand() *cobra.Command {
-	var configPath string
-
-	rootCmd := &cobra.Command{
-		Use:   "opsagent",
-		Short: "Node metrics and remote exec agent",
-	}
-
-	versionCmd := &cobra.Command{
-		Use:   "version",
-		Short: "Print version information",
-		Run: func(_ *cobra.Command, _ []string) {
-			fmt.Println("opsagent", Version)
-		},
-	}
-	rootCmd.AddCommand(versionCmd)
-
-	runCmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run telemetry exec agent",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(configPath)
-			if err != nil {
-				return err
-			}
-
-			logLevel := os.Getenv("LOG_LEVEL")
-			if logLevel == "" {
-				logLevel = "info"
-			}
-			log := logger.New(logLevel)
-
-			agent, err := NewAgent(cfg, log)
-			if err != nil {
-				return err
-			}
-
-			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-			defer cancel()
-
-			// SIGHUP handler for config reload.
-			sigCh := make(chan os.Signal, 1)
-			signal.Notify(sigCh, syscall.SIGHUP)
-			go func() {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case sig := <-sigCh:
-						if sig == syscall.SIGHUP {
-							yaml, readErr := os.ReadFile(configPath)
-							if readErr != nil {
-								log.Error().Err(readErr).Msg("failed to read config file for SIGHUP reload")
-								continue
-							}
-							if applyErr := agent.ConfigReloader().Apply(ctx, yaml); applyErr != nil {
-								log.Error().Err(applyErr).Msg("SIGHUP config reload failed")
-							} else {
-								log.Info().Msg("config reloaded via SIGHUP")
-							}
-						}
-					}
-				}
-			}()
-
-			return agent.Run(ctx)
-		},
-	}
-	runCmd.Flags().StringVar(&configPath, "config", "./configs/config.yaml", "Path to config file")
-
-	rootCmd.AddCommand(runCmd)
-	return rootCmd
 }
 
 // NewAgent builds the runtime agent. Options allow injecting custom

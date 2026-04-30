@@ -27,6 +27,13 @@ func (d *Dispatcher) Register(taskType string, handler Handler) {
 	d.handlers[taskType] = handler
 }
 
+// Unregister removes a task type handler.
+func (d *Dispatcher) Unregister(taskType string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.handlers, taskType)
+}
+
 // Dispatch resolves the task handler and executes it.
 func (d *Dispatcher) Dispatch(ctx context.Context, task AgentTask) (any, error) {
 	d.mu.RLock()

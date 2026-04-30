@@ -47,7 +47,7 @@ type Scheduler struct {
 	logger      zerolog.Logger
 	accSize     int
 	running     bool
-	mu          sync.Mutex
+	mu          sync.RWMutex
 	interval    time.Duration
 	outCh       chan []*Metric
 }
@@ -114,10 +114,10 @@ func (s *Scheduler) Stop() {
 
 // HealthStatus reports the scheduler's running state.
 func (s *Scheduler) HealthStatus() health.Status {
-	s.mu.Lock()
+	s.mu.RLock()
 	running := s.running
 	inputCount := len(s.inputs)
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	status := "stopped"
 	if running {
 		status = "running"
