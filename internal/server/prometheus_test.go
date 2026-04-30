@@ -1,32 +1,54 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/cy77cc/opsagent/internal/collector"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 )
 
-func TestRenderPrometheus(t *testing.T) {
-	payload := &collector.MetricPayload{
-		CPUUsagePercent:    11.2,
-		MemoryUsagePercent: 44.1,
-		DiskUsagePercent:   22.3,
-		NetworkIO: collector.NetworkIO{
-			BytesSent: 123,
-			BytesRecv: 456,
-		},
-		LoadAverage: collector.LoadAverage{Load1: 1.1, Load5: 2.2, Load15: 3.3},
+func TestHandlePrometheusMetrics_NilRegistry(t *testing.T) {
+	s := &Server{
+		logger:       zerolog.Nop(),
+		promRegistry: nil,
+		options:      Options{Prometheus: PrometheusConfig{Enabled: true}},
 	}
-	out := renderPrometheus(payload, 7, time.Now().Add(-10*time.Second), time.Now())
-	if !strings.Contains(out, "opsagent_agent_up 1") {
-		t.Fatalf("missing agent_up metric")
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	s.handlePrometheusMetrics(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
 	}
-	if !strings.Contains(out, "opsagent_metrics_collected_total 7") {
-		t.Fatalf("missing collected counter")
+}
+
+func TestHandlePrometheusMetrics_WithRegistry(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	gauge := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "test_metric", Help: "A test metric",
+	})
+	reg.MustRegister(gauge)
+	gauge.Set(42)
+
+	s := &Server{
+		logger:       zerolog.Nop(),
+		promRegistry: reg,
+		options:      Options{Prometheus: PrometheusConfig{Enabled: true}},
 	}
-	if !strings.Contains(out, "opsagent_cpu_usage_percent 11.2000") {
-		t.Fatalf("missing cpu metric")
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	s.handlePrometheusMetrics(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "test_metric 42") {
+		t.Errorf("expected test_metric 42 in output, got:\n%s", body)
 	}
 }

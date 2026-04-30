@@ -1,74 +1,27 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
-	"strings"
-	"time"
 
-	"github.com/cy77cc/opsagent/internal/collector"
+	"github.com/prometheus/common/expfmt"
 )
 
 func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, _ *http.Request) {
-	payload, collected, startedAt := s.metricsSnapshot()
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(renderPrometheus(payload, collected, startedAt, time.Now().UTC())))
-}
-
-func renderPrometheus(payload *collector.MetricPayload, collected uint64, startedAt, now time.Time) string {
-	var b strings.Builder
-	b.WriteString("# HELP opsagent_agent_up Whether agent process is up.\n")
-	b.WriteString("# TYPE opsagent_agent_up gauge\n")
-	b.WriteString("opsagent_agent_up 1\n")
-
-	uptime := now.Sub(startedAt).Seconds()
-	if uptime < 0 {
-		uptime = 0
+	if s.promRegistry == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
 	}
-	b.WriteString("# HELP opsagent_agent_uptime_seconds Agent process uptime in seconds.\n")
-	b.WriteString("# TYPE opsagent_agent_uptime_seconds gauge\n")
-	b.WriteString(fmt.Sprintf("opsagent_agent_uptime_seconds %.3f\n", uptime))
-
-	b.WriteString("# HELP opsagent_metrics_collected_total Total collected snapshots.\n")
-	b.WriteString("# TYPE opsagent_metrics_collected_total counter\n")
-	b.WriteString(fmt.Sprintf("opsagent_metrics_collected_total %d\n", collected))
-
-	if payload == nil {
-		return b.String()
+	gathered, err := s.promRegistry.Gather()
+	if err != nil {
+		s.logger.Error().Err(err).Msg("failed to gather prometheus metrics")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-
-	b.WriteString("# HELP opsagent_cpu_usage_percent CPU usage percent.\n")
-	b.WriteString("# TYPE opsagent_cpu_usage_percent gauge\n")
-	b.WriteString(fmt.Sprintf("opsagent_cpu_usage_percent %.4f\n", payload.CPUUsagePercent))
-
-	b.WriteString("# HELP opsagent_memory_usage_percent Memory usage percent.\n")
-	b.WriteString("# TYPE opsagent_memory_usage_percent gauge\n")
-	b.WriteString(fmt.Sprintf("opsagent_memory_usage_percent %.4f\n", payload.MemoryUsagePercent))
-
-	b.WriteString("# HELP opsagent_disk_usage_percent Disk usage percent.\n")
-	b.WriteString("# TYPE opsagent_disk_usage_percent gauge\n")
-	b.WriteString(fmt.Sprintf("opsagent_disk_usage_percent %.4f\n", payload.DiskUsagePercent))
-
-	b.WriteString("# HELP opsagent_load1 Host load average over 1 minute.\n")
-	b.WriteString("# TYPE opsagent_load1 gauge\n")
-	b.WriteString(fmt.Sprintf("opsagent_load1 %.4f\n", payload.LoadAverage.Load1))
-
-	b.WriteString("# HELP opsagent_load5 Host load average over 5 minutes.\n")
-	b.WriteString("# TYPE opsagent_load5 gauge\n")
-	b.WriteString(fmt.Sprintf("opsagent_load5 %.4f\n", payload.LoadAverage.Load5))
-
-	b.WriteString("# HELP opsagent_load15 Host load average over 15 minutes.\n")
-	b.WriteString("# TYPE opsagent_load15 gauge\n")
-	b.WriteString(fmt.Sprintf("opsagent_load15 %.4f\n", payload.LoadAverage.Load15))
-
-	b.WriteString("# HELP opsagent_network_bytes_sent Total bytes sent.\n")
-	b.WriteString("# TYPE opsagent_network_bytes_sent counter\n")
-	b.WriteString(fmt.Sprintf("opsagent_network_bytes_sent %d\n", payload.NetworkIO.BytesSent))
-
-	b.WriteString("# HELP opsagent_network_bytes_recv Total bytes received.\n")
-	b.WriteString("# TYPE opsagent_network_bytes_recv counter\n")
-	b.WriteString(fmt.Sprintf("opsagent_network_bytes_recv %d\n", payload.NetworkIO.BytesRecv))
-
-	return b.String()
+	w.Header().Set("Content-Type", string(expfmt.FmtText))
+	for _, mf := range gathered {
+		if _, err := expfmt.MetricFamilyToText(w, mf); err != nil {
+			s.logger.Error().Err(err).Str("metric", mf.GetName()).Msg("failed to write metric")
+			return
+		}
+	}
 }

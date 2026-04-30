@@ -9,6 +9,7 @@ import (
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/executor"
 	"github.com/cy77cc/opsagent/internal/task"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
 
@@ -27,17 +28,19 @@ type PrometheusConfig struct {
 
 // Options configures server runtime behavior.
 type Options struct {
-	Auth       AuthConfig
-	Prometheus PrometheusConfig
+	Auth        AuthConfig
+	Prometheus  PrometheusConfig
+	PromRegistry *prometheus.Registry
 }
 
 // Server hosts local HTTP APIs for health, metrics, tasks, and command exec.
 type Server struct {
-	logger     zerolog.Logger
-	httpServer *http.Server
-	executor   *executor.Executor
-	dispatcher *task.Dispatcher
-	options    Options
+	logger       zerolog.Logger
+	httpServer   *http.Server
+	executor     *executor.Executor
+	dispatcher   *task.Dispatcher
+	options      Options
+	promRegistry *prometheus.Registry
 
 	mu               sync.RWMutex
 	latestMetric     *collector.MetricPayload
@@ -52,11 +55,12 @@ func New(listenAddr string, logger zerolog.Logger, exec *executor.Executor, disp
 	}
 
 	s := &Server{
-		logger:     logger,
-		executor:   exec,
-		dispatcher: dispatcher,
-		startedAt:  startedAt,
-		options:    options,
+		logger:       logger,
+		executor:     exec,
+		dispatcher:   dispatcher,
+		startedAt:    startedAt,
+		options:      options,
+		promRegistry: options.PromRegistry,
 	}
 
 	mux := http.NewServeMux()
