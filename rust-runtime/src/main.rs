@@ -14,6 +14,7 @@ use tracing::{error, info};
 
 use crate::chunking::chunk_output;
 use crate::handlers::conn_analyze::ConnAnalyzePlugin;
+use crate::handlers::ebpf_collect::EbpfCollectPlugin;
 use crate::handlers::fs_scan::FsScanPlugin;
 use crate::handlers::local_probe::LocalProbePlugin;
 use crate::handlers::log_parse::LogParsePlugin;
@@ -56,6 +57,7 @@ fn build_registry() -> PluginRegistry {
     reg.register(Box::new(TextProcessPlugin));
     reg.register(Box::new(ConnAnalyzePlugin));
     reg.register(Box::new(LocalProbePlugin));
+    reg.register(Box::new(EbpfCollectPlugin::new()));
     reg
 }
 
