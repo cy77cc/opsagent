@@ -4,7 +4,7 @@ VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 .PHONY: tidy test test-race test-cover build build-all run lint vet proto proto-gen \
        rust-build sandbox-check integration integration-sandbox security ci \
-       package package-amd64 package-arm64 clean
+       package package-amd64 package-arm64 clean bench e2e
 
 ## ── Go ────────────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,17 @@ test-cover:
 	@go tool cover -func=coverage.out | tail -1
 
 build:
-	go build -o bin/$(APP_NAME) ./cmd/agent
+	go build -ldflags="-s -w \
+		-X github.com/cy77cc/opsagent/internal/app.Version=$(VERSION) \
+		-X github.com/cy77cc/opsagent/internal/app.GitCommit=$(shell git rev-parse --short HEAD) \
+		-X github.com/cy77cc/opsagent/internal/app.BuildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		-o bin/$(APP_NAME) ./cmd/agent
+
+bench:
+	go test -bench=. -benchmem -count=3 ./internal/collector/
+
+e2e:
+	go test -tags=e2e -v -race -count=1 -timeout 120s ./internal/integration/
 
 build-all:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o bin/$(APP_NAME)-amd64 ./cmd/agent
