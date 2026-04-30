@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  go:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -31,5 +31,39 @@ jobs:
       - name: Build
         run: go build ./...
 
+      - name: Test with coverage
+        run: |
+          go test -race -coverprofile=coverage.out -covermode=atomic ./...
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          echo "Coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below 80% minimum"
+            exit 1
+          fi
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build
+        run: cd rust-runtime && cargo build --release
       - name: Test
-        run: go test ./... -race -count=1 -timeout 120s
+        run: cd rust-runtime && cargo test
+      - name: Clippy
+        run: cd rust-runtime && cargo clippy -- -D warnings
+      - name: Audit
+        run: cd rust-runtime && cargo audit
+
+  integration:
+    needs: [go]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+      - name: Integration tests
+        run: go test ./internal/integration/... -v -race -count=1 -timeout 120s
