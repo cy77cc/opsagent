@@ -58,7 +58,7 @@ jobs:
         run: cd rust-runtime && cargo audit
 
   integration:
-    needs: [go]
+    needs: [go, rust]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
