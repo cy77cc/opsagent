@@ -15,10 +15,11 @@ type Config struct {
 	Reporter   ReporterConfig   `mapstructure:"reporter"`
 	Auth       AuthConfig       `mapstructure:"auth"`
 	Prometheus PrometheusConfig `mapstructure:"prometheus"`
-	Plugin     PluginConfig     `mapstructure:"plugin"`
-	GRPC       GRPCConfig       `mapstructure:"grpc"`
-	Sandbox    SandboxConfig    `mapstructure:"sandbox"`
-	Collector  CollectorConfig  `mapstructure:"collector"`
+	Plugin        PluginConfig        `mapstructure:"plugin"`
+	GRPC          GRPCConfig          `mapstructure:"grpc"`
+	Sandbox       SandboxConfig       `mapstructure:"sandbox"`
+	Collector     CollectorConfig     `mapstructure:"collector"`
+	PluginGateway PluginGatewayConfig `mapstructure:"plugin_gateway"`
 }
 
 // AgentConfig controls agent identity and collection cadence.
@@ -131,6 +132,18 @@ type PluginInstanceConfig struct {
 	Config map[string]interface{} `mapstructure:"config"`
 }
 
+// PluginGatewayConfig manages custom plugin discovery and lifecycle.
+type PluginGatewayConfig struct {
+	Enabled                 bool                              `mapstructure:"enabled"`
+	PluginsDir              string                            `mapstructure:"plugins_dir"`
+	StartupTimeoutSeconds   int                               `mapstructure:"startup_timeout_seconds"`
+	HealthCheckIntervalSecs int                               `mapstructure:"health_check_interval_seconds"`
+	MaxRestarts             int                               `mapstructure:"max_restarts"`
+	RestartBackoffSeconds   int                               `mapstructure:"restart_backoff_seconds"`
+	FileWatchDebounceSecs   int                               `mapstructure:"file_watch_debounce_seconds"`
+	PluginConfigs           map[string]map[string]interface{} `mapstructure:"plugin_configs"`
+}
+
 // Load reads and validates configuration from a file path.
 func Load(path string) (*Config, error) {
 	v := viper.New()
@@ -169,6 +182,13 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("sandbox.max_concurrent_tasks", 4)
 	v.SetDefault("sandbox.policy.shell_injection_check", true)
 	v.SetDefault("sandbox.policy.script_max_bytes", 65536)
+	v.SetDefault("plugin_gateway.enabled", false)
+	v.SetDefault("plugin_gateway.plugins_dir", "/etc/opsagent/plugins")
+	v.SetDefault("plugin_gateway.startup_timeout_seconds", 10)
+	v.SetDefault("plugin_gateway.health_check_interval_seconds", 30)
+	v.SetDefault("plugin_gateway.max_restarts", 3)
+	v.SetDefault("plugin_gateway.restart_backoff_seconds", 5)
+	v.SetDefault("plugin_gateway.file_watch_debounce_seconds", 2)
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -312,6 +332,22 @@ func (c *Config) Validate() error {
 		}
 		if c.Sandbox.Policy.ScriptMaxBytes <= 0 {
 			return fmt.Errorf("sandbox.policy.script_max_bytes must be > 0")
+		}
+	}
+
+	// PluginGateway validation (only when enabled).
+	if c.PluginGateway.Enabled {
+		if strings.TrimSpace(c.PluginGateway.PluginsDir) == "" {
+			return fmt.Errorf("plugin_gateway.plugins_dir is required when plugin_gateway.enabled=true")
+		}
+		if c.PluginGateway.StartupTimeoutSeconds <= 0 {
+			return fmt.Errorf("plugin_gateway.startup_timeout_seconds must be > 0")
+		}
+		if c.PluginGateway.HealthCheckIntervalSecs <= 0 {
+			return fmt.Errorf("plugin_gateway.health_check_interval_seconds must be > 0")
+		}
+		if c.PluginGateway.MaxRestarts < 0 {
+			return fmt.Errorf("plugin_gateway.max_restarts must be >= 0")
 		}
 	}
 
