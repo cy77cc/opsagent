@@ -158,6 +158,41 @@ func TestSchedulerReload(t *testing.T) {
 	}
 }
 
+func TestSchedulerHealthStatus_LastCollection(t *testing.T) {
+	input := newTestInput("cpu", nil, map[string]interface{}{"v": 1.0})
+	si := ScheduledInput{Input: input, Interval: 50 * time.Millisecond}
+
+	sched := NewScheduler([]ScheduledInput{si}, nil, nil, nil, zerolog.Nop())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Before start, last_collection should be absent.
+	hs := sched.HealthStatus()
+	if _, ok := hs.Details["last_collection"]; ok {
+		t.Error("expected no last_collection before start")
+	}
+
+	ch := sched.Start(ctx)
+
+	// Wait for at least one gather.
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for metrics")
+	}
+
+	hs = sched.HealthStatus()
+	lc, ok := hs.Details["last_collection"]
+	if !ok {
+		t.Fatal("expected last_collection after gather")
+	}
+	if lc == "" {
+		t.Error("expected non-empty last_collection")
+	}
+
+	sched.Stop()
+}
+
 func TestSchedulerAppliesStaticTags(t *testing.T) {
 	input := newTestInput("cpu", map[string]string{"host": "s1"}, map[string]interface{}{"v": 1.0})
 

@@ -49,7 +49,8 @@ type Scheduler struct {
 	running     bool
 	mu          sync.RWMutex
 	interval    time.Duration
-	outCh       chan []*Metric
+	outCh          chan []*Metric
+	lastCollection time.Time
 }
 
 // defaultSchedulerInterval is the fallback collection interval when no inputs are configured.
@@ -117,14 +118,19 @@ func (s *Scheduler) HealthStatus() health.Status {
 	s.mu.RLock()
 	running := s.running
 	inputCount := len(s.inputs)
+	lastColl := s.lastCollection
 	s.mu.RUnlock()
 	status := "stopped"
 	if running {
 		status = "running"
 	}
+	details := map[string]any{"inputs_active": inputCount}
+	if !lastColl.IsZero() {
+		details["last_collection"] = lastColl.UTC().Format(time.RFC3339)
+	}
 	return health.Status{
 		Status:  status,
-		Details: map[string]any{"inputs_active": inputCount},
+		Details: details,
 	}
 }
 
@@ -287,6 +293,10 @@ func (s *Scheduler) gatherOnce(ctx context.Context, si ScheduledInput, ch chan<-
 			}
 		}
 	}
+
+	s.mu.Lock()
+	s.lastCollection = time.Now()
+	s.mu.Unlock()
 
 	select {
 	case ch <- metrics:
