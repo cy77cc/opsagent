@@ -24,10 +24,19 @@ type Config struct {
 
 // AgentConfig controls agent identity and collection cadence.
 type AgentConfig struct {
-	ID                     string `mapstructure:"id"`
-	Name                   string `mapstructure:"name"`
-	IntervalSeconds        int    `mapstructure:"interval_seconds"`
-	ShutdownTimeoutSeconds int    `mapstructure:"shutdown_timeout_seconds"`
+	ID                     string          `mapstructure:"id"`
+	Name                   string          `mapstructure:"name"`
+	IntervalSeconds        int             `mapstructure:"interval_seconds"`
+	ShutdownTimeoutSeconds int             `mapstructure:"shutdown_timeout_seconds"`
+	AuditLog               AuditLogConfig  `mapstructure:"audit_log"`
+}
+
+// AuditLogConfig controls the agent-level audit log.
+type AuditLogConfig struct {
+	Enabled    bool   `mapstructure:"enabled"`
+	Path       string `mapstructure:"path"`
+	MaxSizeMB  int    `mapstructure:"max_size_mb"`
+	MaxBackups int    `mapstructure:"max_backups"`
 }
 
 // ServerConfig controls local API server settings.
@@ -152,6 +161,10 @@ func Load(path string) (*Config, error) {
 
 	v.SetDefault("agent.interval_seconds", 10)
 	v.SetDefault("agent.shutdown_timeout_seconds", 30)
+	v.SetDefault("agent.audit_log.enabled", false)
+	v.SetDefault("agent.audit_log.path", "/var/log/opsagent/audit.jsonl")
+	v.SetDefault("agent.audit_log.max_size_mb", 100)
+	v.SetDefault("agent.audit_log.max_backups", 5)
 	v.SetDefault("server.listen_addr", "0.0.0.0:18080")
 	v.SetDefault("executor.timeout_seconds", 10)
 	v.SetDefault("executor.max_output_bytes", 65536)

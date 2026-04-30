@@ -48,29 +48,46 @@ import (
 	_ "github.com/cy77cc/opsagent/internal/collector/processors/tagger"
 )
 
-// Version is set at build time via ldflags.
-var Version = "dev"
+// Version information set at build time via ldflags.
+var (
+	Version   = "dev"
+	GitCommit = "unknown"
+	BuildTime = "unknown"
+)
 
 // Agent wires collection, local API server, and task dispatch.
 type Agent struct {
-	cfg            *config.Config
-	log            zerolog.Logger
-	server         HTTPServer
-	executor       *executor.Executor
-	pluginRuntime  PluginRuntime
-	pluginGateway  PluginGateway
-	scheduler      Scheduler
-	grpcClient     GRPCClient
-	sandboxExec    *sandbox.Executor
-	configReloader *config.ConfigReloader
-	startedAt      time.Time
-	activeTasks    sync.Map
-	shuttingDown   atomic.Bool
+	cfg              *config.Config
+	log              zerolog.Logger
+	server           HTTPServer
+	executor         *executor.Executor
+	pluginRuntime    PluginRuntime
+	pluginGateway    PluginGateway
+	scheduler        Scheduler
+	grpcClient       GRPCClient
+	sandboxExec      *sandbox.Executor
+	configReloader   *config.ConfigReloader
+	metricsReg       *MetricsRegistry
+	auditLog         *AuditLogger
+	startedAt        time.Time
+	activeTasks      sync.Map
+	shuttingDown     atomic.Bool
+	shutdownComplete chan struct{}
 }
 
 // ConfigReloader returns the agent's config reloader.
 func (a *Agent) ConfigReloader() *config.ConfigReloader {
 	return a.configReloader
+}
+
+// IsShutdownComplete reports whether the agent has fully shut down.
+func (a *Agent) IsShutdownComplete() bool {
+	select {
+	case <-a.shutdownComplete:
+		return true
+	default:
+		return false
+	}
 }
 
 // NewRootCommand creates the CLI entrypoint.
@@ -153,12 +170,29 @@ func NewRootCommand() *cobra.Command {
 // (primarily for testing).
 func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, error) {
 	a := &Agent{
-		cfg:       cfg,
-		log:       log,
-		startedAt: time.Now().UTC(),
+		cfg:              cfg,
+		log:              log,
+		startedAt:        time.Now().UTC(),
+		shutdownComplete: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(a)
+	}
+
+	// Build metrics registry.
+	a.metricsReg = NewMetricsRegistry()
+
+	// Build audit logger if enabled.
+	if cfg.Agent.AuditLog.Enabled {
+		al, err := NewAuditLogger(
+			cfg.Agent.AuditLog.Path,
+			cfg.Agent.AuditLog.MaxSizeMB,
+			cfg.Agent.AuditLog.MaxBackups,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create audit logger: %w", err)
+		}
+		a.auditLog = al
 	}
 
 	// Build executor (always concrete).
@@ -261,6 +295,12 @@ func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, e
 					Enabled:         cfg.Prometheus.Enabled,
 					Path:            cfg.Prometheus.Path,
 					ProtectWithAuth: cfg.Prometheus.ProtectWithAuth,
+				},
+				PromRegistry: a.metricsReg.Registry(),
+				HealthCheckers: server.HealthCheckers{
+					GRPC:      a.grpcClient,
+					Scheduler: a.scheduler,
+					PluginRT:  a.pluginRuntime,
 				},
 			},
 		)
@@ -444,6 +484,10 @@ func (a *Agent) waitForActiveTasks(ctx context.Context) {
 func (a *Agent) shutdown(ctx context.Context) {
 	// 1. Mark as shutting down.
 	a.shuttingDown.Store(true)
+	a.auditLog.Log(AuditEvent{
+		EventType: "agent.shutting_down", Component: "agent",
+		Action: "shutdown", Status: "success",
+	})
 
 	// 2. Wait for active tasks.
 	a.waitForActiveTasks(ctx)
@@ -476,6 +520,13 @@ func (a *Agent) shutdown(ctx context.Context) {
 	if err := a.server.Shutdown(ctx); err != nil {
 		a.log.Error().Err(err).Msg("failed to shutdown server")
 	}
+
+	a.auditLog.Log(AuditEvent{
+		EventType: "agent.stopped", Component: "agent",
+		Action: "stop", Status: "success",
+	})
+	a.auditLog.Close()
+	close(a.shutdownComplete)
 }
 
 // Run starts all subsystems, enters the event loop, and shuts down on exit.
@@ -484,6 +535,11 @@ func (a *Agent) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	a.auditLog.Log(AuditEvent{
+		EventType: "agent.started", Component: "agent",
+		Action: "start", Status: "success",
+		Details: map[string]interface{}{"agent_id": a.cfg.Agent.ID},
+	})
 	a.eventLoop(ctx, pipelineCh, errCh)
 
 	timeout := time.Duration(a.cfg.Agent.ShutdownTimeoutSeconds) * time.Second
@@ -493,6 +549,31 @@ func (a *Agent) Run(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	a.shutdown(shutdownCtx)
+	return nil
+}
+
+// RunOnce starts the collector pipeline, collects one batch of metrics,
+// prints a summary, and shuts down. Useful for dry-run / debugging.
+func (a *Agent) RunOnce(ctx context.Context) error {
+	if a.scheduler == nil {
+		return fmt.Errorf("no scheduler configured")
+	}
+	ch := a.scheduler.Start(ctx)
+	select {
+	case metrics, ok := <-ch:
+		if !ok {
+			return fmt.Errorf("pipeline channel closed before collecting metrics")
+		}
+		a.handlePipelineMetrics(metrics)
+		totalFields := 0
+		for _, m := range metrics {
+			totalFields += len(m.Fields())
+		}
+		fmt.Printf("Collected %d metrics from pipeline\n", len(metrics))
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	a.scheduler.Stop()
 	return nil
 }
 
@@ -513,8 +594,22 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 
 	dispatcher.Register(task.TypeExecCommand, func(ctx context.Context, t task.AgentTask) (any, error) {
 		if a.shuttingDown.Load() {
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.failed", Component: "dispatcher",
+				Action: "exec_command", Status: "failure",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+				Error:   "agent is shutting down",
+			})
 			return nil, fmt.Errorf("agent is shutting down")
 		}
+
+		a.auditLog.Log(AuditEvent{
+			EventType: "task.started", Component: "dispatcher",
+			Action: "exec_command", Status: "success",
+			Details: map[string]interface{}{"task_id": t.TaskID},
+		})
+		a.metricsReg.TasksRunning.Inc()
+		defer a.metricsReg.TasksRunning.Dec()
 
 		taskCtx, cancel := context.WithCancel(ctx)
 		a.activeTasks.Store(t.TaskID, cancel)
@@ -554,14 +649,37 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 			}
 		}
 
-		return a.executor.Execute(taskCtx, executor.Request{
+		res, err := a.executor.Execute(taskCtx, executor.Request{
 			Command:        cmdVal,
 			Args:           args,
 			TimeoutSeconds: timeoutSeconds,
 		})
+		if err != nil {
+			a.metricsReg.IncTasksFailed("exec_command", "error")
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.failed", Component: "dispatcher",
+				Action: "exec_command", Status: "failure",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+				Error:   err.Error(),
+			})
+			return nil, err
+		}
+
+		a.metricsReg.IncTasksCompleted()
+		a.auditLog.Log(AuditEvent{
+			EventType: "task.completed", Component: "dispatcher",
+			Action: "exec_command", Status: "success",
+			Details: map[string]interface{}{"task_id": t.TaskID},
+		})
+		return res, nil
 	})
 
-	dispatcher.Register(task.TypeHealthCheck, func(_ context.Context, _ task.AgentTask) (any, error) {
+	dispatcher.Register(task.TypeHealthCheck, func(_ context.Context, t task.AgentTask) (any, error) {
+		a.auditLog.Log(AuditEvent{
+			EventType: "task.started", Component: "dispatcher",
+			Action: "health_check", Status: "success",
+			Details: map[string]interface{}{"task_id": t.TaskID},
+		})
 		return map[string]any{
 			"status":            "ok",
 			"agent_id":          a.cfg.Agent.ID,
@@ -582,15 +700,55 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 	for _, tt := range pluginTypes {
 		taskType := tt
 		dispatcher.Register(taskType, func(ctx context.Context, t task.AgentTask) (any, error) {
-			return a.executePluginTask(ctx, t, taskType)
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.started", Component: "dispatcher",
+				Action: taskType, Status: "success",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+			})
+			a.metricsReg.TasksRunning.Inc()
+			defer a.metricsReg.TasksRunning.Dec()
+
+			res, err := a.executePluginTask(ctx, t, taskType)
+			if err != nil {
+				a.metricsReg.IncTasksFailed(taskType, "error")
+				a.auditLog.Log(AuditEvent{
+					EventType: "task.failed", Component: "dispatcher",
+					Action: taskType, Status: "failure",
+					Details: map[string]interface{}{"task_id": t.TaskID},
+					Error:   err.Error(),
+				})
+				return nil, err
+			}
+
+			a.metricsReg.IncTasksCompleted()
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.completed", Component: "dispatcher",
+				Action: taskType, Status: "success",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+			})
+			return res, nil
 		})
 	}
 
 	// Sandbox exec task handler.
 	dispatcher.Register(task.TypeSandboxExec, func(ctx context.Context, t task.AgentTask) (any, error) {
 		if a.shuttingDown.Load() {
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.failed", Component: "dispatcher",
+				Action: "sandbox_exec", Status: "failure",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+				Error:   "agent is shutting down",
+			})
 			return nil, fmt.Errorf("agent is shutting down")
 		}
+
+		a.auditLog.Log(AuditEvent{
+			EventType: "task.started", Component: "dispatcher",
+			Action: "sandbox_exec", Status: "success",
+			Details: map[string]interface{}{"task_id": t.TaskID},
+		})
+		a.metricsReg.TasksRunning.Inc()
+		defer a.metricsReg.TasksRunning.Dec()
 
 		taskCtx, cancel := context.WithCancel(ctx)
 		a.activeTasks.Store(t.TaskID, cancel)
@@ -640,15 +798,41 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 		if scriptVal != "" {
 			result, err := a.sandboxExec.ExecuteScript(taskCtx, req, nil)
 			if err != nil {
+				a.metricsReg.IncTasksFailed("sandbox_exec", "error")
+				a.auditLog.Log(AuditEvent{
+					EventType: "task.failed", Component: "dispatcher",
+					Action: "sandbox_exec", Status: "failure",
+					Details: map[string]interface{}{"task_id": t.TaskID},
+					Error:   err.Error(),
+				})
 				return nil, fmt.Errorf("sandbox script exec: %w", err)
 			}
+			a.metricsReg.IncTasksCompleted()
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.completed", Component: "dispatcher",
+				Action: "sandbox_exec", Status: "success",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+			})
 			return result, nil
 		}
 
 		result, err := a.sandboxExec.ExecuteCommand(taskCtx, req, nil)
 		if err != nil {
+			a.metricsReg.IncTasksFailed("sandbox_exec", "error")
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.failed", Component: "dispatcher",
+				Action: "sandbox_exec", Status: "failure",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+				Error:   err.Error(),
+			})
 			return nil, fmt.Errorf("sandbox command exec: %w", err)
 		}
+		a.metricsReg.IncTasksCompleted()
+		a.auditLog.Log(AuditEvent{
+			EventType: "task.completed", Component: "dispatcher",
+			Action: "sandbox_exec", Status: "success",
+			Details: map[string]interface{}{"task_id": t.TaskID},
+		})
 		return result, nil
 	})
 
@@ -657,10 +841,37 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 		gw.OnPluginLoaded(func(name string, taskTypes []string) {
 			for _, tt := range taskTypes {
 				fullType := pluginruntime.FullTaskType(name, tt)
-				dispatcher.Register(fullType, func(ctx context.Context, t task.AgentTask) (any, error) {
-					return a.executeGatewayTask(ctx, t)
+				ft := fullType
+				dispatcher.Register(ft, func(ctx context.Context, t task.AgentTask) (any, error) {
+					a.auditLog.Log(AuditEvent{
+						EventType: "task.started", Component: "dispatcher",
+						Action: ft, Status: "success",
+						Details: map[string]interface{}{"task_id": t.TaskID},
+					})
+					a.metricsReg.TasksRunning.Inc()
+					defer a.metricsReg.TasksRunning.Dec()
+
+					res, err := a.executeGatewayTask(ctx, t)
+					if err != nil {
+						a.metricsReg.IncTasksFailed(ft, "error")
+						a.auditLog.Log(AuditEvent{
+							EventType: "task.failed", Component: "dispatcher",
+							Action: ft, Status: "failure",
+							Details: map[string]interface{}{"task_id": t.TaskID},
+							Error:   err.Error(),
+						})
+						return nil, err
+					}
+
+					a.metricsReg.IncTasksCompleted()
+					a.auditLog.Log(AuditEvent{
+						EventType: "task.completed", Component: "dispatcher",
+						Action: ft, Status: "success",
+						Details: map[string]interface{}{"task_id": t.TaskID},
+					})
+					return res, nil
 				})
-				a.log.Info().Str("task_type", fullType).Msg("registered gateway task handler")
+				a.log.Info().Str("task_type", ft).Msg("registered gateway task handler")
 			}
 		})
 		gw.OnPluginUnloaded(func(name string, taskTypes []string) {
