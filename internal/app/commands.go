@@ -11,6 +11,8 @@ import (
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/config"
 	"github.com/cy77cc/opsagent/internal/logger"
+	"github.com/cy77cc/opsagent/internal/pluginruntime"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -74,12 +76,26 @@ func NewRootCommand() *cobra.Command {
 							yaml, readErr := os.ReadFile(configPath)
 							if readErr != nil {
 								log.Error().Err(readErr).Msg("failed to read config file for SIGHUP reload")
+								agent.AuditLog().Log(AuditEvent{
+									EventType: "config.rejected", Component: "agent",
+									Action: "sighup_reload", Status: "failure",
+									Error:   readErr.Error(),
+								})
 								continue
 							}
 							if applyErr := agent.ConfigReloader().Apply(ctx, yaml); applyErr != nil {
 								log.Error().Err(applyErr).Msg("SIGHUP config reload failed")
+								agent.AuditLog().Log(AuditEvent{
+									EventType: "config.rejected", Component: "agent",
+									Action: "sighup_reload", Status: "failure",
+									Error:   applyErr.Error(),
+								})
 							} else {
 								log.Info().Msg("config reloaded via SIGHUP")
+								agent.AuditLog().Log(AuditEvent{
+									EventType: "config.reloaded", Component: "agent",
+									Action: "sighup_reload", Status: "success",
+								})
 							}
 						}
 					}
@@ -117,7 +133,22 @@ func newValidateCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("config validation failed: %w", err)
 			}
-			fmt.Println("Config loaded successfully")
+			fmt.Println("✓ Config loaded successfully")
+
+			// Try building the scheduler to verify all factories resolve.
+			sched, err := buildScheduler(cfg, zerolog.Nop())
+			if err != nil {
+				return fmt.Errorf("pipeline validation failed: %w", err)
+			}
+			if sched != nil {
+				fmt.Println("✓ All inputs initialized")
+				fmt.Println("✓ All processors initialized")
+				fmt.Println("✓ All aggregators initialized")
+				fmt.Println("✓ All outputs initialized")
+			} else {
+				fmt.Println("⚠ No inputs configured (scheduler disabled)")
+			}
+
 			fmt.Println("\nResolved config:")
 			fmt.Printf("  agent.id: %q\n", cfg.Agent.ID)
 			fmt.Printf("  agent.interval_seconds: %d\n", cfg.Agent.IntervalSeconds)
@@ -135,7 +166,8 @@ func newValidateCommand() *cobra.Command {
 // newPluginsCommand creates the plugins subcommand which lists all registered
 // built-in plugins from the collector DefaultRegistry.
 func newPluginsCommand() *cobra.Command {
-	return &cobra.Command{
+	var configPath string
+	cmd := &cobra.Command{
 		Use:   "plugins",
 		Short: "List available plugins",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -145,7 +177,48 @@ func newPluginsCommand() *cobra.Command {
 			fmt.Printf("  PROCESSORS:  %s\n", strings.Join(reg.ListProcessors(), ", "))
 			fmt.Printf("  AGGREGATORS: %s\n", strings.Join(reg.ListAggregators(), ", "))
 			fmt.Printf("  OUTPUTS:     %s\n", strings.Join(reg.ListOutputs(), ", "))
+
+			if configPath == "" {
+				return nil
+			}
+
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
+			if cfg.PluginGateway.Enabled {
+				gw := pluginruntime.NewGateway(pluginruntime.GatewayConfig{
+					PluginsDir:    cfg.PluginGateway.PluginsDir,
+					PluginConfigs: cfg.PluginGateway.PluginConfigs,
+				}, zerolog.Nop())
+				ctx := context.Background()
+				if startErr := gw.Start(ctx); startErr != nil {
+					fmt.Printf("\nWarning: could not start plugin gateway: %v\n", startErr)
+				} else {
+					plugins := gw.ListPlugins()
+					if len(plugins) > 0 {
+						fmt.Println("\nCustom plugins:")
+						for _, p := range plugins {
+							fmt.Printf("  %s %s [%s] tasks: %s\n", p.Name, p.Version, p.Status, strings.Join(p.TaskTypes, ", "))
+						}
+					}
+					gw.Stop(ctx)
+				}
+			}
+
+			if cfg.Plugin.Enabled {
+				rt := pluginruntime.New(pluginruntime.Config{
+					Enabled:    cfg.Plugin.Enabled,
+					SocketPath: cfg.Plugin.SocketPath,
+				}, zerolog.Nop())
+				hs := rt.HealthStatus()
+				fmt.Printf("\nPlugin runtime: %s\n", hs.Status)
+			}
+
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to config file (enables custom plugin listing)")
+	return cmd
 }

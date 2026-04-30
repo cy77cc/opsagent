@@ -75,6 +75,11 @@ func (a *Agent) ConfigReloader() *config.ConfigReloader {
 	return a.configReloader
 }
 
+// AuditLog returns the agent's audit logger.
+func (a *Agent) AuditLog() *AuditLogger {
+	return a.auditLog
+}
+
 // IsShutdownComplete reports whether the agent has fully shut down.
 func (a *Agent) IsShutdownComplete() bool {
 	select {
@@ -113,6 +118,10 @@ func NewAgent(cfg *config.Config, log zerolog.Logger, opts ...Option) (*Agent, e
 			return nil, fmt.Errorf("create audit logger: %w", err)
 		}
 		a.auditLog = al
+		a.auditLog.Log(AuditEvent{
+			EventType: "config.loaded", Component: "agent",
+			Action: "load", Status: "success",
+		})
 	}
 
 	// Build executor (always concrete).
@@ -342,6 +351,10 @@ func (a *Agent) startSubsystems(ctx context.Context) (<-chan []*collector.Metric
 	if err := a.pluginRuntime.Start(ctx); err != nil {
 		return nil, nil, fmt.Errorf("start plugin runtime: %w", err)
 	}
+	a.auditLog.Log(AuditEvent{
+		EventType: "plugin.started", Component: "pluginruntime",
+		Action: "start", Status: "success",
+	})
 
 	if a.pluginGateway != nil {
 		if err := a.pluginGateway.Start(ctx); err != nil {
@@ -445,6 +458,10 @@ func (a *Agent) shutdown(ctx context.Context) {
 	if err := a.pluginRuntime.Stop(stopCtx); err != nil {
 		a.log.Error().Err(err).Msg("failed to stop plugin runtime")
 	}
+	a.auditLog.Log(AuditEvent{
+		EventType: "plugin.stopped", Component: "pluginruntime",
+		Action: "stop", Status: "success",
+	})
 
 	// 5b. Stop plugin gateway.
 	if a.pluginGateway != nil {
@@ -753,6 +770,11 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 				Action: "sandbox_exec", Status: "success",
 				Details: map[string]interface{}{"task_id": t.TaskID},
 			})
+			a.auditLog.Log(AuditEvent{
+				EventType: "sandbox.executed", Component: "sandbox",
+				Action: "execute_script", Status: "success",
+				Details: map[string]interface{}{"task_id": t.TaskID},
+			})
 			return result, nil
 		}
 
@@ -771,6 +793,11 @@ func (a *Agent) registerTaskHandlers(dispatcher *task.Dispatcher) {
 		a.auditLog.Log(AuditEvent{
 			EventType: "task.completed", Component: "dispatcher",
 			Action: "sandbox_exec", Status: "success",
+			Details: map[string]interface{}{"task_id": t.TaskID},
+		})
+		a.auditLog.Log(AuditEvent{
+			EventType: "sandbox.executed", Component: "sandbox",
+			Action: "execute", Status: "success",
 			Details: map[string]interface{}{"task_id": t.TaskID},
 		})
 		return result, nil
@@ -927,6 +954,11 @@ func (a *Agent) registerGRPCHandlers(recv *grpcclient.Receiver) {
 		taskID := job.GetTaskId()
 		if cancelFn, ok := a.activeTasks.Load(taskID); ok {
 			cancelFn.(context.CancelFunc)()
+			a.auditLog.Log(AuditEvent{
+				EventType: "task.cancelled", Component: "dispatcher",
+				Action: "cancel", Status: "success",
+				Details: map[string]interface{}{"task_id": taskID},
+			})
 			a.log.Info().Str("task_id", taskID).Msg("cancel job executed")
 		} else {
 			a.log.Warn().Str("task_id", taskID).Msg("cancel job: task not found")
@@ -938,6 +970,11 @@ func (a *Agent) registerGRPCHandlers(recv *grpcclient.Receiver) {
 	recv.SetConfigUpdateHandler(func(ctx context.Context, update *pb.ConfigUpdate) error {
 		if err := a.configReloader.Apply(ctx, update.GetConfigYaml()); err != nil {
 			a.log.Error().Err(err).Int64("version", update.GetVersion()).Msg("config reload failed")
+			a.auditLog.Log(AuditEvent{
+				EventType: "config.rejected", Component: "agent",
+				Action: "hot_reload", Status: "failure",
+				Error:   err.Error(),
+			})
 			a.grpcClient.SendExecResult(&grpcclient.ExecResult{
 				TaskID:   fmt.Sprintf("config-update-%d", update.GetVersion()),
 				ExitCode: -1,
@@ -945,6 +982,11 @@ func (a *Agent) registerGRPCHandlers(recv *grpcclient.Receiver) {
 			return nil
 		}
 		a.log.Info().Int64("version", update.GetVersion()).Msg("config reloaded")
+		a.auditLog.Log(AuditEvent{
+			EventType: "config.reloaded", Component: "agent",
+			Action: "hot_reload", Status: "success",
+			Details: map[string]interface{}{"version": update.GetVersion()},
+		})
 		a.grpcClient.SendExecResult(&grpcclient.ExecResult{
 			TaskID: fmt.Sprintf("config-update-%d", update.GetVersion()),
 		})
