@@ -34,3 +34,6 @@ go.work.sum
 bin/
 dist/
 .superpowers/brainstorm/
+
+# Rust build artifacts
+target/
