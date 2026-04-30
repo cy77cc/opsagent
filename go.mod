@@ -46,4 +46,5 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
