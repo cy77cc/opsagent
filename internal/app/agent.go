@@ -489,7 +489,7 @@ func (a *Agent) RunOnce(ctx context.Context) error {
 		for _, m := range metrics {
 			totalFields += len(m.Fields())
 		}
-		fmt.Printf("Collected %d metrics from pipeline\n", len(metrics))
+		fmt.Printf("Collected %d metrics (%d total fields) from pipeline\n", len(metrics), totalFields)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
