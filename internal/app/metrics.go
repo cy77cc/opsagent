@@ -128,3 +128,13 @@ func (m *MetricsRegistry) IncMetricsCollected() { m.MetricsCollected.Inc() }
 
 // IncGRPCReconnects increments the gRPC reconnects counter.
 func (m *MetricsRegistry) IncGRPCReconnects() { m.GRPCReconnects.Inc() }
+
+// IncPipelineErrors increments the pipeline errors counter with labels.
+func (m *MetricsRegistry) IncPipelineErrors(stage, plugin string) {
+	m.PipelineErrors.WithLabelValues(stage, plugin).Inc()
+}
+
+// IncPluginRequests increments the plugin requests counter with labels.
+func (m *MetricsRegistry) IncPluginRequests(plugin, taskType, status string) {
+	m.PluginRequests.WithLabelValues(plugin, taskType, status).Inc()
+}

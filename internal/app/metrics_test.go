@@ -105,3 +105,89 @@ func TestMetricsCounters(t *testing.T) {
 		}
 	}
 }
+
+func TestMetricsPipelineErrors(t *testing.T) {
+	reg := NewMetricsRegistry()
+	reg.IncPipelineErrors("output", "prometheus")
+	reg.IncPipelineErrors("output", "prometheus")
+
+	mfs, err := reg.Registry().Gather()
+	if err != nil {
+		t.Fatalf("gather error: %v", err)
+	}
+
+	for _, mf := range mfs {
+		if mf.GetName() == "opsagent_pipeline_errors_total" {
+			for _, m := range mf.GetMetric() {
+				labels := m.GetLabel()
+				stage := ""
+				plugin := ""
+				for _, l := range labels {
+					if l.GetName() == "stage" {
+						stage = l.GetValue()
+					}
+					if l.GetName() == "plugin" {
+						plugin = l.GetValue()
+					}
+				}
+				if stage == "output" && plugin == "prometheus" {
+					val := m.GetCounter().GetValue()
+					if val != 2 {
+						t.Errorf("pipeline_errors[output,prometheus] = %f, want 2", val)
+					}
+					return
+				}
+			}
+			t.Error("expected pipeline_errors label combination not found")
+		}
+	}
+}
+
+func TestMetricsPluginRequests(t *testing.T) {
+	reg := NewMetricsRegistry()
+	reg.IncPluginRequests("my-plugin", "log_parse", "success")
+	reg.IncPluginRequests("my-plugin", "log_parse", "error")
+
+	mfs, err := reg.Registry().Gather()
+	if err != nil {
+		t.Fatalf("gather error: %v", err)
+	}
+
+	for _, mf := range mfs {
+		if mf.GetName() == "opsagent_plugin_requests_total" {
+			successFound := false
+			errorFound := false
+			for _, m := range mf.GetMetric() {
+				labels := m.GetLabel()
+				var plugin, taskType, status string
+				for _, l := range labels {
+					switch l.GetName() {
+					case "plugin":
+						plugin = l.GetValue()
+					case "task_type":
+						taskType = l.GetValue()
+					case "status":
+						status = l.GetValue()
+					}
+				}
+				if plugin == "my-plugin" && taskType == "log_parse" {
+					val := m.GetCounter().GetValue()
+					if status == "success" && val == 1 {
+						successFound = true
+					}
+					if status == "error" && val == 1 {
+						errorFound = true
+					}
+				}
+			}
+			if !successFound {
+				t.Error("expected plugin_requests[my-plugin,log_parse,success] = 1")
+			}
+			if !errorFound {
+				t.Error("expected plugin_requests[my-plugin,log_parse,error] = 1")
+			}
+			return
+		}
+	}
+	t.Error("opsagent_plugin_requests_total not found")
+}
