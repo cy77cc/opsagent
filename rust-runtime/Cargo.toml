@@ -7,3 +7,22 @@ edition = "2021"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+thiserror = "1"
+anyhow = "1"
+walkdir = "2"
+glob = "0.3"
+
+[features]
+default = []
+ebpf = ["aya"]
+
+[dependencies.aya]
+version = "0.12"
+optional = true
+
+[dev-dependencies]
+tempfile = "3"
