@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/rs/zerolog"
 )
 
@@ -109,6 +110,22 @@ func (s *Scheduler) Stop() {
 	s.running = false
 	s.mu.Unlock()
 	s.wg.Wait()
+}
+
+// HealthStatus reports the scheduler's running state.
+func (s *Scheduler) HealthStatus() health.Status {
+	s.mu.Lock()
+	running := s.running
+	inputCount := len(s.inputs)
+	s.mu.Unlock()
+	status := "stopped"
+	if running {
+		status = "running"
+	}
+	return health.Status{
+		Status:  status,
+		Details: map[string]any{"inputs_active": inputCount},
+	}
 }
 
 // Reload stops all current inputs, rebuilds the pipeline from cfg, and restarts.

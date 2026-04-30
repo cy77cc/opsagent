@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/cy77cc/opsagent/internal/collector"
+	"github.com/cy77cc/opsagent/internal/health"
 	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
 )
 
@@ -174,6 +175,18 @@ func (c *Client) IsConnected() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.connected
+}
+
+// HealthStatus reports the gRPC client connection health.
+func (c *Client) HealthStatus() health.Status {
+	c.mu.Lock()
+	connected := c.connected
+	c.mu.Unlock()
+	status := "disconnected"
+	if connected {
+		status = "connected"
+	}
+	return health.Status{Status: status}
 }
 
 // connectLoop attempts to connect with exponential backoff.

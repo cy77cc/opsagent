@@ -39,6 +39,34 @@ func TestHandleHealthz(t *testing.T) {
 	}
 }
 
+func TestHandleHealthz_Enhanced(t *testing.T) {
+	s := newTestServer(t)
+	Version = "1.0.0"
+	GitCommit = "abc1234"
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	s.handleHealthz(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	// The response is wrapped in apiResponse
+	data, ok := resp["data"].(map[string]any)
+	if !ok {
+		t.Fatal("expected data field")
+	}
+	if data["version"] != "1.0.0" {
+		t.Errorf("expected version 1.0.0, got %v", data["version"])
+	}
+	if data["status"] == nil {
+		t.Error("expected status field")
+	}
+}
+
 func TestHandleReadyz_NotReady(t *testing.T) {
 	s := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)

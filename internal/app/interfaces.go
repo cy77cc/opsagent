@@ -5,6 +5,7 @@ import (
 
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/grpcclient"
+	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/cy77cc/opsagent/internal/pluginruntime"
 	"github.com/cy77cc/opsagent/internal/server"
 )
@@ -19,6 +20,7 @@ type GRPCClient interface {
 	SendExecOutput(taskID, streamName string, data []byte)
 	SendExecResult(result *grpcclient.ExecResult)
 	IsConnected() bool
+	HealthStatus() health.Status
 }
 
 // HTTPServer abstracts the local HTTP server for health, metrics, and task APIs.
@@ -34,6 +36,7 @@ type HTTPServer interface {
 type Scheduler interface {
 	Start(ctx context.Context) <-chan []*collector.Metric
 	Stop()
+	HealthStatus() health.Status
 }
 
 // PluginRuntime abstracts the external plugin runtime process manager.
@@ -41,6 +44,7 @@ type PluginRuntime interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
 	ExecuteTask(ctx context.Context, req pluginruntime.TaskRequest) (*pluginruntime.TaskResponse, error)
+	HealthStatus() health.Status
 }
 
 // PluginGateway manages custom plugin lifecycle and routing.
@@ -55,6 +59,7 @@ type PluginGateway interface {
 	DisablePlugin(name string) error
 	OnPluginLoaded(fn func(name string, taskTypes []string))
 	OnPluginUnloaded(fn func(name string, taskTypes []string))
+	HealthStatus() health.Status
 }
 
 // Compile-time interface satisfaction checks.

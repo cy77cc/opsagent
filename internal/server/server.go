@@ -8,10 +8,24 @@ import (
 
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/executor"
+	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/cy77cc/opsagent/internal/task"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
+
+// Version information set by the build system.
+var (
+	Version   = "dev"
+	GitCommit = "unknown"
+)
+
+// HealthCheckers holds subsystem health providers.
+type HealthCheckers struct {
+	GRPC      health.Statuser
+	Scheduler health.Statuser
+	PluginRT  health.Statuser
+}
 
 // AuthConfig controls optional bearer auth middleware.
 type AuthConfig struct {
@@ -28,19 +42,21 @@ type PrometheusConfig struct {
 
 // Options configures server runtime behavior.
 type Options struct {
-	Auth        AuthConfig
-	Prometheus  PrometheusConfig
-	PromRegistry *prometheus.Registry
+	Auth           AuthConfig
+	Prometheus     PrometheusConfig
+	PromRegistry   *prometheus.Registry
+	HealthCheckers HealthCheckers
 }
 
 // Server hosts local HTTP APIs for health, metrics, tasks, and command exec.
 type Server struct {
-	logger       zerolog.Logger
-	httpServer   *http.Server
-	executor     *executor.Executor
-	dispatcher   *task.Dispatcher
-	options      Options
-	promRegistry *prometheus.Registry
+	logger         zerolog.Logger
+	httpServer     *http.Server
+	executor       *executor.Executor
+	dispatcher     *task.Dispatcher
+	options        Options
+	promRegistry   *prometheus.Registry
+	healthCheckers HealthCheckers
 
 	mu               sync.RWMutex
 	latestMetric     *collector.MetricPayload
@@ -55,12 +71,13 @@ func New(listenAddr string, logger zerolog.Logger, exec *executor.Executor, disp
 	}
 
 	s := &Server{
-		logger:       logger,
-		executor:     exec,
-		dispatcher:   dispatcher,
-		startedAt:    startedAt,
-		options:      options,
-		promRegistry: options.PromRegistry,
+		logger:         logger,
+		executor:       exec,
+		dispatcher:     dispatcher,
+		startedAt:      startedAt,
+		options:        options,
+		promRegistry:   options.PromRegistry,
+		healthCheckers: options.HealthCheckers,
 	}
 
 	mux := http.NewServeMux()

@@ -11,6 +11,7 @@ import (
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/config"
 	"github.com/cy77cc/opsagent/internal/grpcclient"
+	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/cy77cc/opsagent/internal/pluginruntime"
 	"github.com/rs/zerolog"
 )
@@ -55,6 +56,7 @@ func (m *mockGRPCClient) SendMetrics(_ []*collector.Metric) {
 func (m *mockGRPCClient) SendExecOutput(string, string, []byte)     {}
 func (m *mockGRPCClient) SendExecResult(*grpcclient.ExecResult)     {}
 func (m *mockGRPCClient) IsConnected() bool                         { return true }
+func (m *mockGRPCClient) HealthStatus() health.Status               { return health.Status{Status: "connected"} }
 
 func (m *mockGRPCClient) FlushAndStop(_ context.Context, _ string) error {
 	m.stopCalled.Add(1)
@@ -116,6 +118,9 @@ func (m *mockScheduler) Start(_ context.Context) <-chan []*collector.Metric {
 }
 
 func (m *mockScheduler) Stop() { m.stopCalled.Add(1) }
+func (m *mockScheduler) HealthStatus() health.Status {
+	return health.Status{Status: "running"}
+}
 
 // mockPluginRuntime implements PluginRuntime for testing.
 type mockPluginRuntime struct {
@@ -144,6 +149,10 @@ func (m *mockPluginRuntime) Stop(_ context.Context) error {
 
 func (m *mockPluginRuntime) ExecuteTask(_ context.Context, _ pluginruntime.TaskRequest) (*pluginruntime.TaskResponse, error) {
 	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockPluginRuntime) HealthStatus() health.Status {
+	return health.Status{Status: "running"}
 }
 
 // ---------------------------------------------------------------------------

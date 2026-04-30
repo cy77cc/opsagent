@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/rs/zerolog"
 )
 
@@ -156,6 +157,18 @@ func (r *Runtime) Stop(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// HealthStatus reports the plugin runtime's running state.
+func (r *Runtime) HealthStatus() health.Status {
+	r.mu.Lock()
+	started := r.started
+	r.mu.Unlock()
+	status := "stopped"
+	if started {
+		status = "running"
+	}
+	return health.Status{Status: status}
 }
 
 func waitForSocket(ctx context.Context, socketPath string) error {

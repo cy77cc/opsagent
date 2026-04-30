@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cy77cc/opsagent/internal/executor"
+	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/cy77cc/opsagent/internal/task"
 )
 
@@ -30,7 +31,52 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, apiResponse{Success: true, Data: map[string]any{"status": "ok"}})
+	subsystems := make(map[string]any)
+	overallStatus := "healthy"
+
+	type entry struct {
+		name    string
+		checker health.Statuser
+		isCore  bool
+	}
+	entries := []entry{
+		{"grpc", s.healthCheckers.GRPC, true},
+		{"scheduler", s.healthCheckers.Scheduler, true},
+		{"plugin_runtime", s.healthCheckers.PluginRT, false},
+	}
+
+	for _, e := range entries {
+		if e.checker == nil {
+			subsystems[e.name] = map[string]any{"status": "unavailable"}
+			if e.isCore {
+				overallStatus = "unhealthy"
+			} else if overallStatus == "healthy" {
+				overallStatus = "degraded"
+			}
+			continue
+		}
+		st := e.checker.HealthStatus()
+		subsystems[e.name] = st
+		if st.Status == "error" || st.Status == "stopped" || st.Status == "disconnected" {
+			if e.isCore {
+				overallStatus = "unhealthy"
+			} else if overallStatus == "healthy" {
+				overallStatus = "degraded"
+			}
+		}
+	}
+
+	uptime := int(time.Since(s.startedAt).Seconds())
+	writeJSON(w, http.StatusOK, apiResponse{
+		Success: true,
+		Data: map[string]any{
+			"status":         overallStatus,
+			"version":        Version,
+			"git_commit":     GitCommit,
+			"uptime_seconds": uptime,
+			"subsystems":     subsystems,
+		},
+	})
 }
 
 func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
