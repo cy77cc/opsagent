@@ -48,9 +48,11 @@ func TestHandleHealthz(t *testing.T) {
 }
 
 func TestHandleHealthz_Enhanced(t *testing.T) {
-	s := newTestServer(t)
-	Version = "1.0.0"
-	GitCommit = "abc1234"
+	log := zerolog.Nop()
+	s := New(":0", log, &executor.Executor{}, task.NewDispatcher(), time.Now(), Options{
+		Version:   "1.0.0",
+		GitCommit: "abc1234",
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -62,13 +64,15 @@ func TestHandleHealthz_Enhanced(t *testing.T) {
 
 	var resp map[string]any
 	json.NewDecoder(w.Body).Decode(&resp)
-	// The response is wrapped in apiResponse
 	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatal("expected data field")
 	}
 	if data["version"] != "1.0.0" {
 		t.Errorf("expected version 1.0.0, got %v", data["version"])
+	}
+	if data["git_commit"] != "abc1234" {
+		t.Errorf("expected git_commit abc1234, got %v", data["git_commit"])
 	}
 	if data["status"] == nil {
 		t.Error("expected status field")

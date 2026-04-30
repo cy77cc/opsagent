@@ -14,12 +14,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Version information set by the build system.
-var (
-	Version   = "dev"
-	GitCommit = "unknown"
-)
-
 // HealthCheckers holds subsystem health providers.
 type HealthCheckers struct {
 	GRPC      health.Statuser
@@ -46,6 +40,8 @@ type Options struct {
 	Prometheus     PrometheusConfig
 	PromRegistry   *prometheus.Registry
 	HealthCheckers HealthCheckers
+	Version        string
+	GitCommit      string
 }
 
 // Server hosts local HTTP APIs for health, metrics, tasks, and command exec.
@@ -57,6 +53,8 @@ type Server struct {
 	options        Options
 	promRegistry   *prometheus.Registry
 	healthCheckers HealthCheckers
+	version        string
+	gitCommit      string
 
 	mu               sync.RWMutex
 	latestMetric     *collector.MetricPayload
@@ -78,6 +76,8 @@ func New(listenAddr string, logger zerolog.Logger, exec *executor.Executor, disp
 		options:        options,
 		promRegistry:   options.PromRegistry,
 		healthCheckers: options.HealthCheckers,
+		version:        options.Version,
+		gitCommit:      options.GitCommit,
 	}
 
 	mux := http.NewServeMux()

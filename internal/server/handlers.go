@@ -71,8 +71,8 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 		Success: true,
 		Data: map[string]any{
 			"status":         overallStatus,
-			"version":        Version,
-			"git_commit":     GitCommit,
+			"version":        s.version,
+			"git_commit":     s.gitCommit,
 			"uptime_seconds": uptime,
 			"subsystems":     subsystems,
 		},
