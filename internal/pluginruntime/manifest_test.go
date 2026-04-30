@@ -80,6 +80,19 @@ binary_path: ./my-plugin
 	}
 }
 
+func TestParseManifest_MissingVersion(t *testing.T) {
+	yaml := `
+name: test-plugin
+binary_path: ./my-plugin
+task_types:
+  - audit
+`
+	_, err := ParseManifest([]byte(yaml))
+	if err == nil {
+		t.Fatal("expected error for missing version")
+	}
+}
+
 func TestParseManifest_InvalidVersion(t *testing.T) {
 	yaml := `
 name: test-plugin
