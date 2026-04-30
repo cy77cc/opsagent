@@ -33,3 +33,4 @@ go.work.sum
 .claude/
 bin/
 dist/
+.superpowers/brainstorm/
