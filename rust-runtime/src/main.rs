@@ -1,5 +1,6 @@
 mod chunking;
 mod error;
+mod handlers;
 mod plugin;
 mod protocol;
 mod registry;
