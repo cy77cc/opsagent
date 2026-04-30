@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/grpcclient"
@@ -42,6 +43,43 @@ type PluginRuntime interface {
 	Stop(ctx context.Context) error
 	ExecuteTask(ctx context.Context, req pluginruntime.TaskRequest) (*pluginruntime.TaskResponse, error)
 }
+
+// PluginGateway manages custom plugin lifecycle and routing.
+type PluginGateway interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+	ExecuteTask(ctx context.Context, req pluginruntime.TaskRequest) (*pluginruntime.TaskResponse, error)
+	ListPlugins() []PluginInfo
+	GetPlugin(name string) *PluginInfo
+	ReloadPlugin(name string) error
+	EnablePlugin(name string) error
+	DisablePlugin(name string) error
+	OnPluginLoaded(fn func(name string, taskTypes []string))
+	OnPluginUnloaded(fn func(name string, taskTypes []string))
+}
+
+// PluginInfo is the runtime status of a managed plugin.
+type PluginInfo struct {
+	Name         string        `json:"name"`
+	Version      string        `json:"version"`
+	Status       PluginStatus  `json:"status"`
+	TaskTypes    []string      `json:"task_types"`
+	SocketPath   string        `json:"socket_path"`
+	RestartCount int           `json:"restart_count"`
+	LastHealth   time.Time     `json:"last_health"`
+	Uptime       time.Duration `json:"uptime"`
+}
+
+// PluginStatus represents the state of a managed plugin.
+type PluginStatus string
+
+const (
+	PluginStatusStarting PluginStatus = "starting"
+	PluginStatusRunning  PluginStatus = "running"
+	PluginStatusStopped  PluginStatus = "stopped"
+	PluginStatusError    PluginStatus = "error"
+	PluginStatusDisabled PluginStatus = "disabled"
+)
 
 // Compile-time interface satisfaction checks.
 var (
