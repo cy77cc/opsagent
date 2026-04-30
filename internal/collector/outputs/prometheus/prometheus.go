@@ -169,11 +169,11 @@ func (p *PrometheusOutput) renderPrometheus() string {
 		fields := m.Fields()
 		value := collector.ExtractNumericValue(fields)
 		sb.WriteString(" ")
-		sb.WriteString(fmt.Sprintf("%v", value))
+		fmt.Fprintf(&sb, "%v", value)
 
 		// Write timestamp in milliseconds.
 		sb.WriteString(" ")
-		sb.WriteString(fmt.Sprintf("%d", m.Timestamp().UnixMilli()))
+		fmt.Fprintf(&sb, "%d", m.Timestamp().UnixMilli())
 		sb.WriteString("\n")
 	}
 

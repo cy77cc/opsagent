@@ -2,7 +2,6 @@ package collector
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 
 // testInput is an Input that records Gather calls and emits a fixed metric.
 type testInput struct {
-	mu       sync.Mutex
 	callCount int32
 	metricName string
 	tags       map[string]string

@@ -121,6 +121,7 @@ func (s *Server) LatestMetricExists() bool {
 	return s.latestMetric != nil
 }
 
+//nolint:unused
 func (s *Server) metricsSnapshot() (*collector.MetricPayload, uint64, time.Time) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

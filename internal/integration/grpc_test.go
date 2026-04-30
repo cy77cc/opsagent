@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
 	pb "github.com/cy77cc/opsagent/internal/grpcclient/proto"
@@ -85,9 +86,9 @@ func TestGRPCClientConnect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, "bufnet",
+	conn, err := grpc.NewClient("bufnet",
 		grpc.WithContextDialer(bufDialer(lis)),
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		t.Fatalf("failed to dial bufnet: %v", err)

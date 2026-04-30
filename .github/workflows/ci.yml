@@ -38,9 +38,9 @@ jobs:
         run: go vet ./...
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run ./...
 
       - name: Build
         run: go build ./...
@@ -79,6 +79,8 @@ jobs:
         run: cd rust-runtime && cargo test
       - name: Clippy
         run: cd rust-runtime && cargo clippy -- -D warnings
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
       - name: Audit
         run: cd rust-runtime && cargo audit
 
@@ -90,5 +92,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.1'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
       - name: Integration tests
         run: go test ./internal/integration/... -v -race -count=1 -timeout 120s

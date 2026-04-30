@@ -17,7 +17,7 @@ func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, _ *http.Request)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", string(expfmt.FmtText))
+	w.Header().Set("Content-Type", string(expfmt.NewFormat(expfmt.TypeTextPlain)))
 	for _, mf := range gathered {
 		if _, err := expfmt.MetricFamilyToText(w, mf); err != nil {
 			s.logger.Error().Err(err).Str("metric", mf.GetName()).Msg("failed to write metric")

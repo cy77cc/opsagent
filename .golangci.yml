@@ -1,0 +1,15 @@
+version: "2"
+
+linters:
+  disable:
+    - errcheck
+  enable:
+    - unused
+    - staticcheck
+    - govet
+    - ineffassign
+
+linters-settings:
+  staticcheck:
+    checks:
+      - all
