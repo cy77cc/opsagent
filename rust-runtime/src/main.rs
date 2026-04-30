@@ -1,79 +1,15 @@
 mod error;
+mod protocol;
 
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use serde::{Deserialize, Serialize};
+use protocol::{Chunk, RpcRequest, RpcResponse, RpcError, TaskRequest, TaskResponse, TaskStats};
 use serde_json::{json, Value};
 use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::time::Instant;
-
-#[derive(Debug, Deserialize)]
-struct RpcRequest {
-    id: String,
-    method: String,
-    params: TaskRequest,
-}
-
-#[derive(Debug, Serialize)]
-struct RpcError {
-    code: i32,
-    message: String,
-}
-
-#[derive(Debug, Serialize)]
-struct RpcResponse {
-    id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    result: Option<TaskResponse>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<RpcError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ChunkingConfig {
-    enabled: bool,
-    max_chunk_bytes: usize,
-    max_total_bytes: usize,
-}
-
-#[derive(Debug, Deserialize)]
-struct TaskRequest {
-    task_id: String,
-    r#type: String,
-    #[allow(dead_code)]
-    deadline_ms: i64,
-    payload: Value,
-    chunking: ChunkingConfig,
-}
-
-#[derive(Debug, Serialize)]
-struct Chunk {
-    seq: usize,
-    #[serde(rename = "eof")]
-    eof_flag: bool,
-    data_b64: String,
-}
-
-#[derive(Debug, Serialize)]
-struct TaskStats {
-    duration_ms: i64,
-}
-
-#[derive(Debug, Serialize)]
-struct TaskResponse {
-    task_id: String,
-    status: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    error: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    summary: Option<Value>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    chunks: Vec<Chunk>,
-    stats: TaskStats,
-}
 
 fn main() {
     let socket = parse_socket_path();
