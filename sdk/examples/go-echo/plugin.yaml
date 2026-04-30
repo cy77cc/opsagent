@@ -1,0 +1,11 @@
+name: go-echo
+version: "1.0.0"
+description: "Echo plugin for testing the SDK"
+author: "opsagent@example.com"
+runtime: process
+binary_path: ./go-echo
+task_types:
+  - echo
+limits:
+  max_memory_mb: 64
+  timeout_seconds: 10
