@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum PluginError {
     #[error("Configuration error: {0}")]
     Config(String),

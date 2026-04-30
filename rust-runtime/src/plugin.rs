@@ -12,6 +12,7 @@ pub struct PluginResult {
 
 #[async_trait]
 pub trait Plugin: Send + Sync {
+    #[allow(dead_code)]
     fn name(&self) -> &str;
     fn task_type(&self) -> &str;
     async fn execute(&self, payload: &Value) -> Result<PluginResult, PluginError>;

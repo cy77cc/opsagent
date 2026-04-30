@@ -34,6 +34,7 @@ impl PluginRegistry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn registered_types(&self) -> Vec<&str> {
         self.plugins.keys().map(|s| s.as_str()).collect()
     }
