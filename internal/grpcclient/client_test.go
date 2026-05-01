@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -152,16 +153,12 @@ func TestBuildAgentInfo(t *testing.T) {
 
 func TestBuildTLSCredentials_NoConfig(t *testing.T) {
 	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
-	creds, err := c.buildTLSCredentials()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := c.buildTLSCredentials()
+	if err == nil {
+		t.Fatal("expected error when no TLS certificates configured")
 	}
-	if creds == nil {
-		t.Fatal("expected non-nil credentials")
-	}
-	// Should be insecure when no TLS config is set.
-	if creds.Info().SecurityProtocol != "insecure" {
-		t.Errorf("expected insecure protocol, got %s", creds.Info().SecurityProtocol)
+	if !strings.Contains(err.Error(), "no TLS certificates configured") {
+		t.Errorf("expected 'no TLS certificates configured' in error, got: %v", err)
 	}
 }
 
@@ -568,6 +565,43 @@ func TestBuildTLSCredentials_CAOnlyPath(t *testing.T) {
 	_, err := c.buildTLSCredentials()
 	if err == nil {
 		t.Error("expected error for nonexistent CA file with CA-only path")
+	}
+}
+
+func TestBuildTLSCredentials_RejectsInsecureFallback(t *testing.T) {
+	c := &Client{
+		cfg: Config{
+			CertPath: "",
+			KeyPath:  "",
+			CAPath:   "",
+		},
+	}
+	_, err := c.buildTLSCredentials()
+	if err == nil {
+		t.Fatal("expected error when no TLS certificates configured")
+	}
+	if !strings.Contains(err.Error(), "no TLS certificates configured") {
+		t.Errorf("expected 'no TLS certificates configured' in error, got: %v", err)
+	}
+}
+
+func TestExtractServerName(t *testing.T) {
+	tests := []struct {
+		addr string
+		want string
+	}{
+		{"platform.example.com:443", "platform.example.com"},
+		{"10.0.0.1:8443", "10.0.0.1"},
+		{"localhost:9090", "localhost"},
+		{"no-port", "no-port"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.addr, func(t *testing.T) {
+			got := extractServerName(tc.addr)
+			if got != tc.want {
+				t.Errorf("extractServerName(%q) = %q, want %q", tc.addr, got, tc.want)
+			}
+		})
 	}
 }
 

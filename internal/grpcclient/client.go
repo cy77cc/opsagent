@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"runtime"
 	"sync"
@@ -16,7 +17,6 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/cy77cc/opsagent/internal/collector"
 	"github.com/cy77cc/opsagent/internal/health"
@@ -393,13 +393,16 @@ func (c *Client) buildAgentInfo() *pb.AgentInfo {
 
 // buildTLSCredentials creates transport credentials based on the mTLS configuration.
 // If no client certs are configured, it falls back to system CA for server verification.
-// If all cert paths are empty, it returns insecure credentials for dev environments.
+// If all cert paths are empty, it returns an error to prevent insecure connections.
 func (c *Client) buildTLSCredentials() (credentials.TransportCredentials, error) {
 	if c.cfg.CertPath == "" && c.cfg.KeyPath == "" && c.cfg.CAPath == "" {
-		return insecure.NewCredentials(), nil
+		return nil, fmt.Errorf("no TLS certificates configured; refusing insecure connection (set grpc.mtls.cert_file, key_file, and ca_file)")
 	}
 
-	tlsCfg := &tls.Config{}
+	tlsCfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: extractServerName(c.cfg.ServerAddr),
+	}
 
 	// Load client certificate if provided.
 	if c.cfg.CertPath != "" && c.cfg.KeyPath != "" {
@@ -424,6 +427,15 @@ func (c *Client) buildTLSCredentials() (credentials.TransportCredentials, error)
 	}
 
 	return credentials.NewTLS(tlsCfg), nil
+}
+
+// extractServerName pulls the hostname from a "host:port" address for TLS ServerName.
+func extractServerName(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
 }
 
 // closeConn closes the gRPC connection if open.
