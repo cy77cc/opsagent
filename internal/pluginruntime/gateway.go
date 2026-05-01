@@ -487,6 +487,23 @@ func mergePluginConfig(manifestCfg, agentCfg map[string]interface{}) map[string]
 	return merged
 }
 
+// buildPluginEnv constructs a sanitized environment for a plugin process.
+// It includes only a safe PATH, the plugin socket variable, and any
+// manifest-declared env vars that are not known library injection vectors.
+func buildPluginEnv(socketPath string, manifestEnv map[string]string) []string {
+	env := []string{
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"OPSAGENT_PLUGIN_SOCKET=" + socketPath,
+	}
+	for k, v := range manifestEnv {
+		if k == "LD_PRELOAD" || k == "LD_LIBRARY_PATH" || k == "DYLD_INSERT_LIBRARIES" {
+			continue
+		}
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
 // startProcess launches a plugin binary with the socket path env var.
 func startProcess(manifest *PluginManifest, socketPath string) (*ManagedProcess, error) {
 	if _, err := os.Stat(manifest.BinaryPath); err != nil {
@@ -494,7 +511,7 @@ func startProcess(manifest *PluginManifest, socketPath string) (*ManagedProcess,
 	}
 
 	cmd := exec.Command(manifest.BinaryPath)
-	cmd.Env = append(os.Environ(), "OPSAGENT_PLUGIN_SOCKET="+socketPath)
+	cmd.Env = buildPluginEnv(socketPath, manifest.Env)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

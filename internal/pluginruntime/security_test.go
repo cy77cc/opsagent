@@ -3,6 +3,7 @@ package pluginruntime
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,45 @@ task_types: [test]
 	_, err := LoadManifest(manifestPath)
 	if err == nil {
 		t.Error("expected error for path traversal in binary_path")
+	}
+}
+
+func TestBuildPluginEnv(t *testing.T) {
+	manifestEnv := map[string]string{
+		"MY_CONFIG":  "value",
+		"LD_PRELOAD": "/evil.so",
+	}
+	env := buildPluginEnv("/tmp/test.sock", manifestEnv)
+
+	hasSocket := false
+	hasPath := false
+	hasLD := false
+	hasConfig := false
+	for _, e := range env {
+		if e == "OPSAGENT_PLUGIN_SOCKET=/tmp/test.sock" {
+			hasSocket = true
+		}
+		if strings.HasPrefix(e, "PATH=") {
+			hasPath = true
+		}
+		if strings.HasPrefix(e, "LD_PRELOAD=") {
+			hasLD = true
+		}
+		if e == "MY_CONFIG=value" {
+			hasConfig = true
+		}
+	}
+	if !hasSocket {
+		t.Error("missing OPSAGENT_PLUGIN_SOCKET")
+	}
+	if !hasPath {
+		t.Error("missing PATH")
+	}
+	if hasLD {
+		t.Error("LD_PRELOAD should be blocked")
+	}
+	if !hasConfig {
+		t.Error("missing MY_CONFIG")
 	}
 }
 

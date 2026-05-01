@@ -70,6 +70,10 @@ func ServeWithOptions(handler Handler, opts ...Option) error {
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", socketPath, err)
 	}
+	if err := os.Chmod(socketPath, 0o600); err != nil {
+		ln.Close()
+		return fmt.Errorf("chmod socket: %w", err)
+	}
 	o.Logger.Info("plugin listening", "socket", socketPath)
 
 	// Signal handling for graceful shutdown.
