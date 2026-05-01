@@ -23,13 +23,13 @@ func sanitizeTaskID(taskID string) (string, error) {
 	return cleaned, nil
 }
 
-// seccompPolicy is a minimal syscall whitelist for sandboxed processes.
-// Only syscalls needed for basic process execution, I/O, and memory management are allowed.
-const seccompPolicy = `ALLOW {
+// baseSyscalls is the minimal syscall whitelist for sandboxed processes.
+// clone, fork, and vfork are deliberately excluded to prevent fork bombs.
+const baseSyscalls = `ALLOW {
     read, write, open, close, mmap, munmap, mprotect, brk,
     access, stat, fstat, lstat, ioctl, pread64, pwrite64,
     readv, writev, pipe, dup, dup2, nanosleep, getpid,
-    clone, fork, vfork, execve, exit, wait4, kill, uname,
+    execve, exit, wait4, kill, uname,
     fcntl, flock, fsync, fdatasync, truncate, ftruncate,
     getdents, getcwd, chdir, rename, mkdir, rmdir, link,
     unlink, readlink, chmod, chown, umask, gettimeofday,
@@ -40,11 +40,23 @@ const seccompPolicy = `ALLOW {
     readlinkat, faccessat, epoll_create1, pipe2, dup3,
     prlimit64, getrandom, rseq, sigaltstack, rt_sigaction,
     rt_sigprocmask, madvise, getpeername, getsockname,
-    socket, connect, bind, listen, accept, accept4,
-    sendto, recvfrom, sendmsg, recvmsg, shutdown,
-    setsockopt, getsockopt, socketpair, eventfd2,
     timerfd_create, timerfd_settime, timerfd_gettime
 }`
+
+// networkSyscalls are appended to the base policy when NetworkMode is "allowlist".
+const networkSyscalls = `,
+    socket, connect, bind, listen, accept, accept4,
+    sendto, recvfrom, sendmsg, recvmsg, shutdown,
+    setsockopt, getsockopt, socketpair, eventfd2`
+
+// seccompPolicyString returns the seccomp policy for the given config.
+// Network syscalls are only included when NetworkMode is "allowlist".
+func (c *NsjailConfig) seccompPolicyString() string {
+	if c.NetworkMode == "allowlist" {
+		return baseSyscalls[:len(baseSyscalls)-1] + networkSyscalls + "\n}"
+	}
+	return baseSyscalls
+}
 
 // NsjailConfig holds the resource and isolation parameters for an nsjail execution.
 type NsjailConfig struct {
@@ -103,7 +115,7 @@ func (c *NsjailConfig) ToArgs(taskID string) []string {
 	)
 
 	// Seccomp policy string — minimal syscall whitelist.
-	args = append(args, fmt.Sprintf("--seccomp_policy_string=%s", seccompPolicy))
+	args = append(args, fmt.Sprintf("--seccomp_policy_string=%s", c.seccompPolicyString()))
 
 	// Network mode.
 	switch c.NetworkMode {
