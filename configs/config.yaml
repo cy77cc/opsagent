@@ -5,7 +5,7 @@ agent:
   shutdown_timeout_seconds: 30
 
 server:
-  listen_addr: "0.0.0.0:18080"
+  listen_addr: "127.0.0.1:18080"
 
 executor:
   timeout_seconds: 10
@@ -27,8 +27,8 @@ reporter:
   retry_interval_ms: 500
 
 auth:
-  enabled: false
-  bearer_token: ""
+  enabled: true
+  bearer_token: ""  # Must be set to a 32+ character value in deployment
 
 prometheus:
   enabled: true

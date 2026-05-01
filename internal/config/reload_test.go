@@ -72,7 +72,7 @@ reporter:
   timeout_seconds: 5
 auth:
   enabled: true
-  bearer_token: tok
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "x:443"
   heartbeat_interval_seconds: 15
@@ -170,7 +170,7 @@ reporter:
   timeout_seconds: 5
 auth:
   enabled: true
-  bearer_token: tok
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "x:443"
   heartbeat_interval_seconds: 15

@@ -49,6 +49,8 @@ executor:
 reporter:
   mode: "stdout"
   endpoint: ""
+auth:
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "platform.example.com:443"
 `)
@@ -95,6 +97,8 @@ executor:
   allowed_commands: ["echo"]
 reporter:
   mode: "stdout"
+auth:
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "platform:443"
 `)
@@ -804,5 +808,93 @@ func TestValidatePluginGatewayDisabledSkipsChecks(t *testing.T) {
 	cfg.PluginGateway = PluginGatewayConfig{Enabled: false}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected no error when plugin_gateway disabled, got: %v", err)
+	}
+}
+
+func TestValidate_AuthTokenMinLength(t *testing.T) {
+	tests := []struct {
+		name    string
+		token   string
+		wantErr bool
+	}{
+		{"empty", "", true},
+		{"too short 1 char", "a", true},
+		{"too short 31 chars", strings.Repeat("a", 31), true},
+		{"exactly 32 chars", strings.Repeat("a", 32), false},
+		{"long token", strings.Repeat("a", 64), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Auth = AuthConfig{Enabled: true, BearerToken: tt.token}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("token length=%d, wantErr=%v, got err=%v", len(tt.token), tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_ListenAddrLocalhostByDefault(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.yaml")
+	content := []byte(`agent:
+  id: "a1"
+  name: "n1"
+  interval_seconds: 5
+executor:
+  timeout_seconds: 3
+  max_output_bytes: 1024
+  allowed_commands: ["echo"]
+reporter:
+  mode: "stdout"
+auth:
+  bearer_token: "01234567890123456789012345678901"
+grpc:
+  server_addr: "platform.example.com:443"
+`)
+	if err := os.WriteFile(cfgPath, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Server.ListenAddr != "127.0.0.1:18080" {
+		t.Errorf("expected listen addr 127.0.0.1:18080, got %s", cfg.Server.ListenAddr)
+	}
+}
+
+func TestLoadConfig_AuthEnabledByDefault(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.yaml")
+	content := []byte(`agent:
+  id: "a1"
+  name: "n1"
+  interval_seconds: 5
+server:
+  listen_addr: "127.0.0.1:18080"
+executor:
+  timeout_seconds: 3
+  max_output_bytes: 1024
+  allowed_commands: ["echo"]
+reporter:
+  mode: "stdout"
+auth:
+  bearer_token: "01234567890123456789012345678901"
+grpc:
+  server_addr: "platform.example.com:443"
+`)
+	if err := os.WriteFile(cfgPath, content, 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Auth.Enabled {
+		t.Error("expected auth.enabled to be true by default")
 	}
 }

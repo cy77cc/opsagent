@@ -247,6 +247,8 @@ agent:
   name: test
 server:
   listen_addr: ":0"
+auth:
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "localhost:50051"
 executor:
@@ -287,6 +289,8 @@ agent:
   interval_seconds: 10
 server:
   listen_addr: ":0"
+auth:
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "localhost:50051"
 executor:
@@ -333,6 +337,8 @@ agent:
   name: test
 server:
   listen_addr: ":0"
+auth:
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "localhost:50051"
 executor:
@@ -392,6 +398,8 @@ agent:
   name: test
 server:
   listen_addr: ":0"
+auth:
+  bearer_token: "01234567890123456789012345678901"
 grpc:
   server_addr: "localhost:50051"
 executor:

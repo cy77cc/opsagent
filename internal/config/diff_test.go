@@ -107,7 +107,7 @@ func TestDiff_MixedChangesNonReloadableBlocksAll(t *testing.T) {
 		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
 		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
 		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
-		Auth:     AuthConfig{Enabled: true, BearerToken: "tok"}, // reloadable change
+		Auth:     AuthConfig{Enabled: true, BearerToken: "01234567890123456789012345678901"}, // reloadable change
 	}
 	cs, nonReloadable, err := Diff(old, newCfg)
 	if err != nil {
@@ -151,7 +151,7 @@ func TestDiff_AuthChanged(t *testing.T) {
 		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
 		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
 		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
-		Auth:     AuthConfig{Enabled: true, BearerToken: "new-token"},
+		Auth:     AuthConfig{Enabled: true, BearerToken: "01234567890123456789012345678901"},
 	}
 	cs, nonReloadable, err := Diff(old, newCfg)
 	if err != nil {

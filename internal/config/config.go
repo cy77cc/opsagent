@@ -165,14 +165,14 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("agent.audit_log.path", "/var/log/opsagent/audit.jsonl")
 	v.SetDefault("agent.audit_log.max_size_mb", 100)
 	v.SetDefault("agent.audit_log.max_backups", 5)
-	v.SetDefault("server.listen_addr", "0.0.0.0:18080")
+	v.SetDefault("server.listen_addr", "127.0.0.1:18080")
 	v.SetDefault("executor.timeout_seconds", 10)
 	v.SetDefault("executor.max_output_bytes", 65536)
 	v.SetDefault("reporter.mode", "stdout")
 	v.SetDefault("reporter.timeout_seconds", 5)
 	v.SetDefault("reporter.retry_count", 3)
 	v.SetDefault("reporter.retry_interval_ms", 500)
-	v.SetDefault("auth.enabled", false)
+	v.SetDefault("auth.enabled", true)
 	v.SetDefault("prometheus.enabled", true)
 	v.SetDefault("prometheus.path", "/metrics")
 	v.SetDefault("prometheus.protect_with_auth", false)
@@ -266,8 +266,14 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("reporter.retry_interval_ms must be >= 0")
 	}
 
-	if c.Auth.Enabled && strings.TrimSpace(c.Auth.BearerToken) == "" {
-		return fmt.Errorf("auth.bearer_token is required when auth.enabled=true")
+	if c.Auth.Enabled {
+		token := strings.TrimSpace(c.Auth.BearerToken)
+		if token == "" {
+			return fmt.Errorf("auth.bearer_token is required when auth.enabled=true")
+		}
+		if len(token) < 32 {
+			return fmt.Errorf("auth.bearer_token must be at least 32 characters when auth.enabled=true")
+		}
 	}
 
 	if c.Prometheus.Enabled {
