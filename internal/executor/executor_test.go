@@ -124,6 +124,49 @@ func TestLimitedBuffer_WriteMaxZero(t *testing.T) {
 	}
 }
 
+func TestExecute_RejectsNullByteInArgs(t *testing.T) {
+	e := New([]string{"echo"}, 2*time.Second, 1024)
+	_, err := e.Execute(context.Background(), Request{
+		Command: "echo",
+		Args:    []string{"hello\x00world"},
+	})
+	if err == nil {
+		t.Fatal("expected error for null byte in argument")
+	}
+	if !strings.Contains(err.Error(), "null byte") {
+		t.Errorf("expected 'null byte' in error, got: %v", err)
+	}
+}
+
+func TestExecute_RejectsOversizedArgs(t *testing.T) {
+	e := New([]string{"echo"}, 2*time.Second, 1024)
+	bigArg := strings.Repeat("x", 4097)
+	_, err := e.Execute(context.Background(), Request{
+		Command: "echo",
+		Args:    []string{bigArg},
+	})
+	if err == nil {
+		t.Fatal("expected error for oversized argument")
+	}
+	if !strings.Contains(err.Error(), "too long") {
+		t.Errorf("expected 'too long' in error, got: %v", err)
+	}
+}
+
+func TestExecute_AllowsValidArgs(t *testing.T) {
+	e := New([]string{"echo"}, 2*time.Second, 1024)
+	res, err := e.Execute(context.Background(), Request{
+		Command: "echo",
+		Args:    []string{"hello", "world"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", res.ExitCode)
+	}
+}
+
 func TestBuildWhitelist_EmptyAndWhitespaceEntries(t *testing.T) {
 	commands := []string{"echo", "", "  ", "\t", "ls"}
 	wl := buildWhitelist(commands)

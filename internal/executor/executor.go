@@ -61,6 +61,11 @@ func (e *Executor) Execute(ctx context.Context, req Request) (*Result, error) {
 		return nil, fmt.Errorf("command %q is not allowed", cmdName)
 	}
 
+	// Validate each argument for injection patterns.
+	if err := validateArgs(req.Args); err != nil {
+		return nil, fmt.Errorf("invalid arguments: %w", err)
+	}
+
 	timeout := e.defaultTimeout
 	if req.TimeoutSeconds > 0 {
 		timeout = time.Duration(req.TimeoutSeconds) * time.Second
@@ -113,6 +118,20 @@ func (e *Executor) Execute(ctx context.Context, req Request) (*Result, error) {
 	}
 
 	return nil, fmt.Errorf("execute command %q: %w", cmdName, err)
+}
+
+const maxArgLength = 4096
+
+func validateArgs(args []string) error {
+	for i, arg := range args {
+		if strings.ContainsRune(arg, '\x00') {
+			return fmt.Errorf("argument %d contains null byte", i)
+		}
+		if len(arg) > maxArgLength {
+			return fmt.Errorf("argument %d too long (%d bytes, max %d)", i, len(arg), maxArgLength)
+		}
+	}
+	return nil
 }
 
 type limitedBuffer struct {
