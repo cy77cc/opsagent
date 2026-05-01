@@ -44,7 +44,12 @@ jobs:
       - name: Smoke test
         run: |
           chmod +x dist/${{ matrix.goarch }}/${{ env.APP_NAME }}
-          dist/${{ matrix.goarch }}/${{ env.APP_NAME }} version
+          file dist/${{ matrix.goarch }}/${{ env.APP_NAME }}
+          if [ "${{ matrix.goarch }}" = "$(go env GOHOSTARCH)" ]; then
+            dist/${{ matrix.goarch }}/${{ env.APP_NAME }} version
+          else
+            echo "Skipping execution for cross-compiled ${{ matrix.goarch }} binary on $(go env GOHOSTARCH) host"
+          fi
 
       - name: Package ${{ matrix.goarch }}
         env:
