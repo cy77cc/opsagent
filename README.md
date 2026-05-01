@@ -305,6 +305,8 @@ sudo ./uninstall.sh
 9. 审计日志记录所有安全相关事件（config/plugin/task/grpc/sandbox）
 10. 插件网关健康检查失败自动重启（指数退避），超限标记为 error
 
+> 完整安全加固文档见 [安全加固手册](docs/security-hardening.md)。
+
 ## CI/CD
 
 项目使用 GitHub Actions 自动化：
@@ -381,7 +383,24 @@ OpsAgent/
 │   ├── ci.yml                    # CI: build + test + vet
 │   └── release.yml               # Release: 交叉编译 + 打包 + 发布
 ├── docs/                         # 文档
-│   ├── platform-integration-guide.md
-│   └── plugin-contract.md
+│   ├── README.md                     # 文档索引
+│   ├── platform-integration-guide.md # 平台集成指南
+│   ├── plugin-contract.md            # 插件协议规范
+│   ├── sdk-development-guide.md      # SDK 开发指南
+│   ├── security-hardening.md         # 安全加固手册
+│   ├── operations-guide.md           # 运维部署指南
+│   ├── changelog.md                  # 变更记录
+│   └── archive/                      # 归档文档（开发计划与设计规格）
 └── Makefile
 ```
+
+## 文档
+
+| 文档 | 说明 |
+|------|------|
+| [平台集成指南](docs/platform-integration-guide.md) | 平台侧开发者指南：gRPC 服务实现、消息交互流程 |
+| [插件协议规范](docs/plugin-contract.md) | UDS JSON-RPC 2.0 协议定义 |
+| [SDK 开发指南](docs/sdk-development-guide.md) | Go/Rust 插件 SDK 使用指南 |
+| [安全加固手册](docs/security-hardening.md) | 安全架构、加固措施、审计配置 |
+| [运维部署指南](docs/operations-guide.md) | 部署、监控、故障排查 |
+| [CHANGELOG](docs/changelog.md) | 版本变更历史 |
