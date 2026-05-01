@@ -14,7 +14,7 @@ func sanitizeTaskID(taskID string) (string, error) {
 		return "", fmt.Errorf("task ID is required")
 	}
 	cleaned := filepath.Clean(taskID)
-	if cleaned == ".." || strings.ContainsAny(cleaned, `/\`) {
+	if cleaned == "." || cleaned == ".." || strings.ContainsAny(cleaned, `/\`) {
 		return "", fmt.Errorf("invalid task ID: %q contains path traversal", taskID)
 	}
 	if strings.ContainsRune(cleaned, '\x00') {
@@ -60,6 +60,10 @@ type NsjailConfig struct {
 
 // ToArgs generates the nsjail CLI arguments for the given task.
 func (c *NsjailConfig) ToArgs(taskID string) []string {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return nil
+	}
 	args := []string{
 		"--mode=ONCE",
 		"--really_quiet",
@@ -123,6 +127,10 @@ func (c *NsjailConfig) ToArgs(taskID string) []string {
 
 // CommandArgs appends the executable command and arguments to the nsjail args.
 func (c *NsjailConfig) CommandArgs(taskID string, command string, cmdArgs []string) []string {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return nil
+	}
 	args := c.ToArgs(taskID)
 	args = append(args, "--", command)
 	args = append(args, cmdArgs...)
@@ -131,6 +139,10 @@ func (c *NsjailConfig) CommandArgs(taskID string, command string, cmdArgs []stri
 
 // ScriptArgs appends the interpreter invocation to the nsjail args using a script file path.
 func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptPath string) ([]string, error) {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
 	interpPath, err := interpreterToPath(interpreter)
 	if err != nil {
 		return nil, err

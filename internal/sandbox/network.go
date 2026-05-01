@@ -27,6 +27,10 @@ func (nm *NetworkManager) SetupIsolatedNetwork(taskID string) error {
 // SetupAllowlistNetwork creates a veth pair and iptables rules that only
 // allow traffic to the specified IP addresses for the given task.
 func (nm *NetworkManager) SetupAllowlistNetwork(taskID string, allowedIPs []string) error {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return err
+	}
 	if !nm.enabled {
 		return fmt.Errorf("network manager is not enabled")
 	}
@@ -62,6 +66,10 @@ func (nm *NetworkManager) SetupAllowlistNetwork(taskID string, allowedIPs []stri
 // CleanupNetwork removes the veth pair for the given task, which also
 // removes associated iptables rules.
 func (nm *NetworkManager) CleanupNetwork(taskID string) error {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return err
+	}
 	vethHost := fmt.Sprintf("veth-h-%s", truncateID(taskID, 8))
 
 	// Deleting one end of the veth pair removes both.
