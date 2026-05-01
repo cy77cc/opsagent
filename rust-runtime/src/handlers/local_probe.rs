@@ -58,10 +58,8 @@ fn check_disk_space(_threshold: f64) -> Result<(Status, String), PluginError> {
 }
 
 fn check_memory_pressure(threshold: f64) -> Result<(Status, String), PluginError> {
-    let meminfo =
-        std::fs::read_to_string("/proc/meminfo").map_err(|e| {
-            PluginError::Resource(format!("failed to read /proc/meminfo: {}", e))
-        })?;
+    let meminfo = std::fs::read_to_string("/proc/meminfo")
+        .map_err(|e| PluginError::Resource(format!("failed to read /proc/meminfo: {}", e)))?;
 
     let mut mem_total: u64 = 0;
     let mut mem_available: u64 = 0;

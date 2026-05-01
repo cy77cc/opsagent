@@ -31,9 +31,7 @@ impl Plugin for EbpfCollectPlugin {
         #[cfg(not(feature = "ebpf"))]
         {
             let _ = payload;
-            Err(PluginError::Unsupported(
-                "eBPF support not compiled".into(),
-            ))
+            Err(PluginError::Unsupported("eBPF support not compiled".into()))
         }
     }
 }

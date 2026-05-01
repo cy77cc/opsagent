@@ -142,8 +142,11 @@ impl Plugin for ConnAnalyzePlugin {
 
         // Filter by states if specified
         if !include_states.is_empty() {
-            all_conns
-                .retain(|c| include_states.iter().any(|s| s.eq_ignore_ascii_case(&c.state)));
+            all_conns.retain(|c| {
+                include_states
+                    .iter()
+                    .any(|s| s.eq_ignore_ascii_case(&c.state))
+            });
         }
 
         let total = all_conns.len();
@@ -168,7 +171,7 @@ impl Plugin for ConnAnalyzePlugin {
             }
         }
         let mut top_remote: Vec<(String, u64)> = remote_counts.into_iter().collect();
-        top_remote.sort_by(|a, b| b.1.cmp(&a.1));
+        top_remote.sort_by_key(|b| std::cmp::Reverse(b.1));
         top_remote.truncate(top_n);
 
         // Top local ports
@@ -179,7 +182,7 @@ impl Plugin for ConnAnalyzePlugin {
             }
         }
         let mut top_ports: Vec<(u16, u64)> = port_counts.into_iter().collect();
-        top_ports.sort_by(|a, b| b.1.cmp(&a.1));
+        top_ports.sort_by_key(|b| std::cmp::Reverse(b.1));
         top_ports.truncate(top_n);
 
         Ok(PluginResult {

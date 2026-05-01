@@ -98,14 +98,17 @@ mod tests {
 
     #[test]
     fn test_rpc_response_success_serializes() {
-        let resp = RpcResponse::success("t1".into(), TaskResponse {
-            task_id: "t1".into(),
-            status: "ok".into(),
-            error: String::new(),
-            summary: None,
-            chunks: vec![],
-            stats: TaskStats { duration_ms: 10 },
-        });
+        let resp = RpcResponse::success(
+            "t1".into(),
+            TaskResponse {
+                task_id: "t1".into(),
+                status: "ok".into(),
+                error: String::new(),
+                summary: None,
+                chunks: vec![],
+                stats: TaskStats { duration_ms: 10 },
+            },
+        );
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("\"id\":\"t1\""));
         assert!(json.contains("\"status\":\"ok\""));

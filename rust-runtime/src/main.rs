@@ -190,7 +190,9 @@ mod tests {
         assert_eq!(resp["result"]["status"], "ok");
         let b64 = resp["result"]["chunks"][0]["data_b64"].as_str().unwrap();
         use base64::Engine;
-        let decoded = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
         assert_eq!(String::from_utf8(decoded).unwrap(), "HELLO");
 
         handle.abort();
