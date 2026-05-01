@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/cy77cc/opsagent/internal/collector"
@@ -49,11 +50,18 @@ type payload struct {
 
 // Init configures the HTTP output from the provided config map.
 func (h *HTTPOutput) Init(cfg map[string]interface{}) error {
-	url, ok := cfg["url"].(string)
-	if !ok || url == "" {
+	urlStr, ok := cfg["url"].(string)
+	if !ok || urlStr == "" {
 		return fmt.Errorf("http output: url is required")
 	}
-	h.url = url
+	parsed, err := url.Parse(urlStr)
+	if err != nil {
+		return fmt.Errorf("http output: invalid url: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("http output: url scheme must be http or https, got %q", parsed.Scheme)
+	}
+	h.url = urlStr
 
 	// Apply defaults, then override with config values.
 	h.timeout = defaultTimeout

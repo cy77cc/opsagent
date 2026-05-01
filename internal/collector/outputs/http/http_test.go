@@ -237,6 +237,30 @@ func TestHTTPOutput_Batching(t *testing.T) {
 	}
 }
 
+func TestInitURLValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"valid http", "http://localhost:8080/metrics", false},
+		{"valid https", "https://example.com/metrics", false},
+		{"file scheme", "file:///etc/passwd", true},
+		{"gopher scheme", "gopher://evil.com", true},
+		{"empty", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &HTTPOutput{}
+			cfg := map[string]interface{}{"url": tt.url}
+			err := h.Init(cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Init with url %q: error = %v, wantErr %v", tt.url, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestHTTPOutput_SampleConfig(t *testing.T) {
 	h := &HTTPOutput{}
 	cfg := h.SampleConfig()

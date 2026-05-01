@@ -69,14 +69,61 @@ func TestHandleHealthz_Enhanced(t *testing.T) {
 	if !ok {
 		t.Fatal("expected data field")
 	}
-	if data["version"] != "1.0.0" {
-		t.Errorf("expected version 1.0.0, got %v", data["version"])
+	// Without auth enabled, version info should NOT be exposed.
+	if data["version"] != nil {
+		t.Errorf("expected no version without auth, got %v", data["version"])
 	}
-	if data["git_commit"] != "abc1234" {
-		t.Errorf("expected git_commit abc1234, got %v", data["git_commit"])
+	if data["git_commit"] != nil {
+		t.Errorf("expected no git_commit without auth, got %v", data["git_commit"])
+	}
+	if data["uptime_seconds"] != nil {
+		t.Errorf("expected no uptime_seconds without auth, got %v", data["uptime_seconds"])
 	}
 	if data["status"] == nil {
 		t.Error("expected status field")
+	}
+}
+
+func TestHandleHealthz_AuthenticatedVersionDisclosure(t *testing.T) {
+	log := zerolog.Nop()
+	s := New(":0", log, &executor.Executor{}, task.NewDispatcher(), time.Now(), Options{
+		Version:   "1.0.0",
+		GitCommit: "abc1234",
+		Auth: AuthConfig{
+			Enabled:     true,
+			BearerToken: "test-secret",
+		},
+	})
+
+	// Without auth header: version info should NOT be exposed.
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	s.handleHealthz(w, req)
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	data := resp["data"].(map[string]any)
+	if data["version"] != nil {
+		t.Errorf("expected no version without auth header, got %v", data["version"])
+	}
+
+	// With valid auth header: version info SHOULD be exposed.
+	req2 := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req2.Header.Set("Authorization", "Bearer test-secret")
+	w2 := httptest.NewRecorder()
+	s.handleHealthz(w2, req2)
+
+	var resp2 map[string]any
+	json.NewDecoder(w2.Body).Decode(&resp2)
+	data2 := resp2["data"].(map[string]any)
+	if data2["version"] != "1.0.0" {
+		t.Errorf("expected version 1.0.0, got %v", data2["version"])
+	}
+	if data2["git_commit"] != "abc1234" {
+		t.Errorf("expected git_commit abc1234, got %v", data2["git_commit"])
+	}
+	if data2["uptime_seconds"] == nil {
+		t.Error("expected uptime_seconds with valid auth")
 	}
 }
 

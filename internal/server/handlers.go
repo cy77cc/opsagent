@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cy77cc/opsagent/internal/executor"
@@ -72,16 +74,25 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	uptime := int(time.Since(s.startedAt).Seconds())
+	data := map[string]any{
+		"status":     overallStatus,
+		"subsystems": subsystems,
+	}
+
+	// Only expose version info when auth is enabled and request is authenticated.
+	if s.options.Auth.Enabled {
+		auth := strings.TrimSpace(r.Header.Get("Authorization"))
+		expected := "Bearer " + s.options.Auth.BearerToken
+		if subtle.ConstantTimeCompare([]byte(auth), []byte(expected)) == 1 {
+			data["version"] = s.version
+			data["git_commit"] = s.gitCommit
+			data["uptime_seconds"] = int(time.Since(s.startedAt).Seconds())
+		}
+	}
+
 	writeJSON(w, http.StatusOK, apiResponse{
 		Success: true,
-		Data: map[string]any{
-			"status":         overallStatus,
-			"version":        s.version,
-			"git_commit":     s.gitCommit,
-			"uptime_seconds": uptime,
-			"subsystems":     subsystems,
-		},
+		Data:    data,
 	})
 }
 
