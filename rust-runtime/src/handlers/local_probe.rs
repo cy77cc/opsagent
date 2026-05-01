@@ -137,7 +137,13 @@ fn check_oom_killer(_lookback_minutes: u64) -> Result<(Status, String), PluginEr
     {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let oom_count = stdout.matches("Out of memory").count();
+            // Only check last 64KB to avoid excessive memory use
+            let truncated = if stdout.len() > 65536 {
+                &stdout[stdout.len() - 65536..]
+            } else {
+                &stdout
+            };
+            let oom_count = truncated.matches("Out of memory").count();
             if oom_count > 0 {
                 Ok((Status::Fail, format!("{} OOM events found", oom_count)))
             } else {

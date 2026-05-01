@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_target(false).init();
 
     let socket_path = std::env::var("OPSAGENT_PLUGIN_SOCKET")
-        .unwrap_or_else(|_| "/tmp/opsagent/plugin.sock".to_string());
+        .expect("OPSAGENT_PLUGIN_SOCKET environment variable must be set");
 
     if std::fs::metadata(&socket_path).is_ok() {
         let _ = std::fs::remove_file(&socket_path);

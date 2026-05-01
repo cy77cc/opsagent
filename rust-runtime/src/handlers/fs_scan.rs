@@ -11,6 +11,7 @@ use crate::error::PluginError;
 use crate::plugin::{Plugin, PluginResult};
 
 const MAX_FILES: usize = 1_000_000;
+const ALLOWED_ROOTS: &[&str] = &["/var/log", "/opt", "/srv", "/tmp"];
 
 pub struct FsScanPlugin {
     default_max_depth: usize,
@@ -44,6 +45,15 @@ impl Plugin for FsScanPlugin {
             return Err(PluginError::Config(format!(
                 "root_path does not exist: {}",
                 root_path
+            )));
+        }
+
+        let canonical = std::fs::canonicalize(root_path)
+            .map_err(|_| PluginError::Config(format!("root_path does not exist or is not accessible: {}", root_path)))?;
+        let is_allowed = ALLOWED_ROOTS.iter().any(|allowed| canonical.starts_with(allowed));
+        if !is_allowed {
+            return Err(PluginError::Config(format!(
+                "root_path {} is not under allowed roots: {:?}", root_path, ALLOWED_ROOTS
             )));
         }
 
@@ -84,6 +94,7 @@ impl Plugin for FsScanPlugin {
 
         for entry in WalkDir::new(root_path)
             .max_depth(max_depth)
+            .follow_links(false)
             .into_iter()
             .filter_entry(|e| e.file_type().is_file() || e.file_type().is_dir())
         {
