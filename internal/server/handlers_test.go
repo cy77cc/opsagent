@@ -274,7 +274,11 @@ func TestHandleTask_BadJSON(t *testing.T) {
 }
 
 func TestHandleExec_RejectsOversizedBody(t *testing.T) {
-	s := newTestServer(t)
+	// Use an executor with "echo" in the allowlist so that without
+	// MaxBytesReader the request would succeed (200).
+	log := zerolog.Nop()
+	exec := executor.New([]string{"echo"}, 1*time.Second, 1024)
+	s := New(":0", log, exec, task.NewDispatcher(), time.Now(), Options{})
 
 	bigBody := `{"command":"echo","args":["` + strings.Repeat("x", 2*1024*1024) + `"]}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/exec", strings.NewReader(bigBody))
@@ -284,6 +288,14 @@ func TestHandleExec_RejectsOversizedBody(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for oversized body, got %d", w.Code)
+	}
+
+	var resp apiResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !strings.Contains(resp.Error, "request body too large") {
+		t.Fatalf("expected 'request body too large' in error, got %q", resp.Error)
 	}
 }
 
@@ -298,6 +310,15 @@ func TestHandleTask_RejectsOversizedBody(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for oversized body, got %d", w.Code)
+	}
+
+	// Verify the 400 comes from the body size limit, not downstream validation.
+	var resp apiResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !strings.Contains(resp.Error, "request body too large") {
+		t.Fatalf("expected 'request body too large' in error, got %q", resp.Error)
 	}
 }
 
