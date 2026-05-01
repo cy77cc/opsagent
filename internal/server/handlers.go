@@ -12,6 +12,8 @@ import (
 	"github.com/cy77cc/opsagent/internal/task"
 )
 
+const maxTimeoutSeconds = 300
+
 type apiResponse struct {
 	Success bool   `json:"success"`
 	Data    any    `json:"data,omitempty"`
@@ -29,7 +31,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	}
 }
 
-func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiResponse{Success: false, Error: "method not allowed"})
+		return
+	}
+
 	subsystems := make(map[string]any)
 	overallStatus := "healthy"
 
@@ -78,7 +85,12 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiResponse{Success: false, Error: "method not allowed"})
+		return
+	}
+
 	latest := s.getLatestMetric()
 	if latest == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiResponse{Success: false, Error: "collector not ready"})
@@ -87,7 +99,12 @@ func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, apiResponse{Success: true, Data: map[string]any{"status": "ready"}})
 }
 
-func (s *Server) handleLatestMetrics(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleLatestMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiResponse{Success: false, Error: "method not allowed"})
+		return
+	}
+
 	latest := s.getLatestMetric()
 	if latest == nil {
 		writeJSON(w, http.StatusNotFound, apiResponse{Success: false, Error: "no metrics collected yet"})
@@ -137,7 +154,7 @@ func (s *Server) handleTask(w http.ResponseWriter, r *http.Request) {
 	timeoutSeconds := 15
 	if timeoutVal, ok := req.Payload["timeout_seconds"]; ok {
 		if seconds, ok := parseTimeoutSeconds(timeoutVal); ok && seconds > 0 {
-			timeoutSeconds = seconds
+			timeoutSeconds = min(seconds, maxTimeoutSeconds)
 		}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeoutSeconds)*time.Second)

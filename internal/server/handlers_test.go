@@ -429,3 +429,52 @@ func TestHandleExec_ErrorDoesNotLeakInternalDetails(t *testing.T) {
 		t.Errorf("error message leaks command name: %q", resp.Error)
 	}
 }
+
+func TestReadyzRejectsPost(t *testing.T) {
+	s := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/readyz", nil)
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST /readyz status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestLatestMetricsRejectsPost(t *testing.T) {
+	s := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/metrics/latest", nil)
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST /api/v1/metrics/latest status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestHandleTask_TimeoutCapped(t *testing.T) {
+	log := zerolog.Nop()
+	dispatcher := task.NewDispatcher()
+	dispatcher.Register("ping", func(ctx context.Context, _ task.AgentTask) (any, error) {
+		// Verify the context deadline does not exceed maxTimeoutSeconds.
+		deadline, ok := ctx.Deadline()
+		if ok {
+			remaining := time.Until(deadline)
+			if remaining > time.Duration(maxTimeoutSeconds+1)*time.Second {
+				t.Errorf("timeout not capped: deadline is %v in the future, want at most %v", remaining, maxTimeoutSeconds)
+			}
+		}
+		return map[string]string{"result": "pong"}, nil
+	})
+	s := New(":0", log, &executor.Executor{}, dispatcher, time.Now(), Options{})
+
+	body := `{"task_id":"1","type":"ping","payload":{"timeout_seconds":999999}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	s.handleTask(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
