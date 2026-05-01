@@ -37,7 +37,7 @@ func NewAuditLogger(logger zerolog.Logger, logPath string) *AuditLogger {
 	base := logger.With().Str("component", "sandbox-audit")
 
 	if logPath != "" {
-		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err == nil {
 			multi := zerolog.MultiLevelWriter(logger, f)
 			return &AuditLogger{

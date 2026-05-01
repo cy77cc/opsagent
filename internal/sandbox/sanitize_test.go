@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -86,5 +87,34 @@ func TestSeccompPolicyString(t *testing.T) {
 				t.Errorf("seccomp policy should not allow clone/fork/vfork")
 			}
 		})
+	}
+}
+
+func TestWriteScriptFileUnpredictablePath(t *testing.T) {
+	cfg := NsjailConfig{}
+	path1, err := cfg.WriteScriptFile("task-1", "echo hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path1)
+
+	path2, err := cfg.WriteScriptFile("task-1", "echo hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path2)
+
+	// Paths should be different even for same taskID (unpredictable)
+	if path1 == path2 {
+		t.Errorf("expected unpredictable paths, got same path twice: %s", path1)
+	}
+
+	// Verify file permissions
+	info, err := os.Stat(path1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("expected permissions 0600, got %o", info.Mode().Perm())
 	}
 }

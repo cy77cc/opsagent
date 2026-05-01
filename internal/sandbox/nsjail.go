@@ -165,24 +165,39 @@ func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptPath string)
 	return args, nil
 }
 
-// WriteScriptFile writes script content to a temporary file and returns its path.
+// WriteScriptFile writes script content to a temporary file with an unpredictable
+// name and returns its path. The file is created with 0600 permissions.
 func (c *NsjailConfig) WriteScriptFile(taskID, scriptContent string) (string, error) {
-	taskID, err := sanitizeTaskID(taskID)
-	if err != nil {
+	if _, err := sanitizeTaskID(taskID); err != nil {
 		return "", err
 	}
 	scriptDir := filepath.Join(os.TempDir(), "nsjail-scripts")
 	if err := os.MkdirAll(scriptDir, 0o700); err != nil {
 		return "", fmt.Errorf("create script dir: %w", err)
 	}
-	scriptPath := filepath.Join(scriptDir, fmt.Sprintf("task-%s.sh", taskID))
-	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0o600); err != nil {
-		return "", fmt.Errorf("write script file: %w", err)
+	f, err := os.CreateTemp(scriptDir, "task-*.sh")
+	if err != nil {
+		return "", fmt.Errorf("create script file: %w", err)
 	}
-	return scriptPath, nil
+	if err := os.Chmod(f.Name(), 0o600); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	if _, err := f.WriteString(scriptContent); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
-// WriteConfigFile writes a minimal nsjail config file for the given task and returns its path.
+// WriteConfigFile writes a minimal nsjail config file with an unpredictable name
+// for the given task and returns its path. The file is created with 0600 permissions.
 func (c *NsjailConfig) WriteConfigFile(taskID string) (string, error) {
 	taskID, err := sanitizeTaskID(taskID)
 	if err != nil {
@@ -193,13 +208,26 @@ func (c *NsjailConfig) WriteConfigFile(taskID string) (string, error) {
 		return "", fmt.Errorf("create nsjail config dir: %w", err)
 	}
 
-	cfgPath := filepath.Join(cfgDir, fmt.Sprintf("task-%s.cfg", taskID))
-	content := c.buildConfigContent(taskID)
-
-	if err := os.WriteFile(cfgPath, []byte(content), 0o600); err != nil {
-		return "", fmt.Errorf("write nsjail config: %w", err)
+	f, err := os.CreateTemp(cfgDir, "task-*.cfg")
+	if err != nil {
+		return "", fmt.Errorf("create nsjail config: %w", err)
 	}
-	return cfgPath, nil
+	if err := os.Chmod(f.Name(), 0o600); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	content := c.buildConfigContent(taskID)
+	if _, err := f.WriteString(content); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // buildConfigContent produces the text of an nsjail protobuf config.
