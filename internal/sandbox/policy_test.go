@@ -292,6 +292,29 @@ func TestPolicyBlockSudoByDefault(t *testing.T) {
 	}
 }
 
+func TestPolicyBlockShellInjection_ExtendedChars(t *testing.T) {
+	p := Policy{AllowedCommands: []string{"echo"}}
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"single-quote", []string{"hello'world"}},
+		{"double-quote", []string{"hello\"world"}},
+		{"backslash", []string{"hello\\world"}},
+		{"glob-star", []string{"*.txt"}},
+		{"glob-question", []string{"file?.txt"}},
+		{"hash-comment", []string{"hello#comment"}},
+		{"tilde-expand", []string{"~/secret"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := p.ValidateCommand("echo", tc.args); err == nil {
+				t.Fatalf("expected shell metacharacter rejection for %q", tc.args)
+			}
+		})
+	}
+}
+
 func TestPolicyBlockedCommandCaseSensitive(t *testing.T) {
 	p := Policy{BlockedCommands: []string{"rm"}}
 	// "RM" is different from "rm" — command blocking is case-sensitive.

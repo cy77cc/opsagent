@@ -111,6 +111,13 @@ var shellMetachars = []string{
 	">",
 	"<",
 	"\n",
+	"'",
+	"\"",
+	"\\",
+	"*",
+	"?",
+	"#",
+	"~",
 }
 
 // containsShellMetacharacters checks whether s contains any shell metacharacter.
