@@ -90,6 +90,59 @@ func TestSeccompPolicyString(t *testing.T) {
 	}
 }
 
+func TestBuildSandboxEnv(t *testing.T) {
+	reqEnv := map[string]string{
+		"MY_VAR":          "value",
+		"LD_PRELOAD":      "/evil.so",
+		"LD_LIBRARY_PATH": "/evil",
+	}
+	env := buildSandboxEnv(reqEnv)
+
+	// Should contain PATH
+	found := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			found = true
+		}
+		if strings.HasPrefix(e, "LD_PRELOAD=") {
+			t.Error("LD_PRELOAD should be blocked")
+		}
+		if strings.HasPrefix(e, "LD_LIBRARY_PATH=") {
+			t.Error("LD_LIBRARY_PATH should be blocked")
+		}
+		if e == "MY_VAR=value" {
+			// good
+		}
+	}
+	if !found {
+		t.Error("PATH should be present")
+	}
+}
+
+func TestBuildSandboxEnvBlocksDYLD(t *testing.T) {
+	reqEnv := map[string]string{
+		"DYLD_INSERT_LIBRARIES": "/evil.dylib",
+		"SAFE_VAR":              "ok",
+	}
+	env := buildSandboxEnv(reqEnv)
+
+	for _, e := range env {
+		if strings.HasPrefix(e, "DYLD_INSERT_LIBRARIES=") {
+			t.Error("DYLD_INSERT_LIBRARIES should be blocked")
+		}
+	}
+	// SAFE_VAR should be present
+	found := false
+	for _, e := range env {
+		if e == "SAFE_VAR=ok" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("SAFE_VAR should be present")
+	}
+}
+
 func TestWriteScriptFileUnpredictablePath(t *testing.T) {
 	cfg := NsjailConfig{}
 	path1, err := cfg.WriteScriptFile("task-1", "echo hello")

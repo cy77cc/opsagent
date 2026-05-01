@@ -220,11 +220,9 @@ func (e *Executor) run(ctx context.Context, req ExecRequest, nsCfg NsjailConfig,
 	// Build the nsjail command.
 	cmd := exec.CommandContext(execCtx, e.cfg.NsjailPath, nsjailArgs...)
 
-	// Set environment variables.
-	cmd.Env = os.Environ()
-	for k, v := range req.Env {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
-	}
+	// Set environment variables — use a minimal allowlist rather than os.Environ()
+	// to avoid leaking host secrets and block library injection attacks.
+	cmd.Env = buildSandboxEnv(req.Env)
 
 	// Pipe output.
 	cmd.Stdout = stdoutStreamer
@@ -334,4 +332,23 @@ func commandOrScript(req ExecRequest) string {
 		return "script"
 	}
 	return "command"
+}
+
+// buildSandboxEnv constructs a minimal environment for the sandboxed process.
+// It starts with a safe allowlist (PATH, HOME, LANG) and merges in request-specified
+// variables, blocking dangerous ones like LD_PRELOAD, LD_LIBRARY_PATH, and
+// DYLD_INSERT_LIBRARIES that could be used to inject code into the child process.
+func buildSandboxEnv(reqEnv map[string]string) []string {
+	env := []string{
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"HOME=/tmp",
+		"LANG=C",
+	}
+	for k, v := range reqEnv {
+		if k == "LD_PRELOAD" || k == "LD_LIBRARY_PATH" || k == "DYLD_INSERT_LIBRARIES" {
+			continue
+		}
+		env = append(env, k+"="+v)
+	}
+	return env
 }
