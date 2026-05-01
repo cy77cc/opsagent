@@ -294,8 +294,8 @@ func TestHandleExec_RejectsOversizedBody(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode error: %v", err)
 	}
-	if !strings.Contains(resp.Error, "request body too large") {
-		t.Fatalf("expected 'request body too large' in error, got %q", resp.Error)
+	if !strings.Contains(resp.Error, "invalid request body") {
+		t.Fatalf("expected 'invalid request body' in error, got %q", resp.Error)
 	}
 }
 
@@ -317,8 +317,8 @@ func TestHandleTask_RejectsOversizedBody(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode error: %v", err)
 	}
-	if !strings.Contains(resp.Error, "request body too large") {
-		t.Fatalf("expected 'request body too large' in error, got %q", resp.Error)
+	if !strings.Contains(resp.Error, "invalid request body") {
+		t.Fatalf("expected 'invalid request body' in error, got %q", resp.Error)
 	}
 }
 
@@ -405,5 +405,27 @@ func TestHandleTask_Success(t *testing.T) {
 	}
 	if !resp.Success {
 		t.Error("expected success=true")
+	}
+}
+
+func TestHandleExec_ErrorDoesNotLeakInternalDetails(t *testing.T) {
+	s := newTestServer(t)
+
+	body := `{"command": "forbidden_cmd", "args": []}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/exec", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+
+	var resp apiResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+
+	if resp.Error == "" {
+		t.Fatal("expected non-empty error message")
+	}
+	if strings.Contains(resp.Error, "forbidden_cmd") {
+		t.Errorf("error message leaks command name: %q", resp.Error)
 	}
 }

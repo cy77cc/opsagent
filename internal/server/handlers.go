@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -106,14 +105,15 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	var req executor.Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: fmt.Sprintf("invalid request: %v", err)})
+		s.logger.Warn().Err(err).Msg("invalid exec request body")
+		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: "invalid request body"})
 		return
 	}
 
 	res, err := s.executor.Execute(r.Context(), req)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("exec request failed")
-		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: err.Error()})
+		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: "command execution failed"})
 		return
 	}
 
@@ -129,7 +129,8 @@ func (s *Server) handleTask(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	var req task.AgentTask
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: fmt.Sprintf("invalid request: %v", err)})
+		s.logger.Warn().Err(err).Msg("invalid task request body")
+		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: "invalid request body"})
 		return
 	}
 
@@ -145,7 +146,7 @@ func (s *Server) handleTask(w http.ResponseWriter, r *http.Request) {
 	res, err := s.dispatcher.Dispatch(ctx, req)
 	if err != nil {
 		s.logger.Error().Err(err).Str("task_type", req.Type).Msg("task dispatch failed")
-		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: err.Error()})
+		writeJSON(w, http.StatusBadRequest, apiResponse{Success: false, Error: "task dispatch failed"})
 		return
 	}
 
