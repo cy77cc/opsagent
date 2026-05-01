@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		}
 		auth := strings.TrimSpace(r.Header.Get("Authorization"))
 		expected := "Bearer " + s.options.Auth.BearerToken
-		if auth != expected {
+		if subtle.ConstantTimeCompare([]byte(auth), []byte(expected)) != 1 {
 			if s.options.Prometheus.Enabled && r.URL.Path == s.options.Prometheus.Path {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return

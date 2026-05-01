@@ -97,6 +97,26 @@ func TestRequiresAuth_PrometheusProtectWithAuth(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_TimingSafeComparison(t *testing.T) {
+	s := New(":0", zerolog.Nop(), &executor.Executor{}, task.NewDispatcher(), time.Now(), Options{
+		Auth: AuthConfig{Enabled: true, BearerToken: "abcdefghij1234567890123456789012"},
+	})
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := s.authMiddleware(inner)
+
+	// Test with token that differs only in the last character.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/exec", nil)
+	req.Header.Set("Authorization", "Bearer abcdefghij123456789012345678901X")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong token, got %d", w.Code)
+	}
+}
+
 func TestAuthMiddleware_PrometheusUnauthorizedPlainError(t *testing.T) {
 	s := New(":0", zerolog.Nop(), &executor.Executor{}, task.NewDispatcher(), time.Now(), Options{
 		Auth:       AuthConfig{Enabled: true, BearerToken: "tok"},
