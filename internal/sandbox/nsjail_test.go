@@ -82,7 +82,10 @@ func TestNsjailConfigCommand(t *testing.T) {
 
 func TestNsjailConfigScript(t *testing.T) {
 	cfg := NsjailConfig{TimeLimit: 10, MemoryMB: 64, WorkDir: "/work"}
-	args := cfg.ScriptArgs("task-002", "bash", "/tmp/script.sh")
+	args, err := cfg.ScriptArgs("task-002", "bash", "/tmp/script.sh")
+	if err != nil {
+		t.Fatalf("ScriptArgs() error: %v", err)
+	}
 	argStr := strings.Join(args, " ")
 
 	if !strings.Contains(argStr, "/bin/bash /tmp/script.sh") {
@@ -241,20 +244,33 @@ func TestBuildConfigContentWriteConfigFile(t *testing.T) {
 
 func TestInterpreterToPath(t *testing.T) {
 	tests := []struct {
-		input, want string
+		input   string
+		want    string
+		wantErr bool
 	}{
-		{"bash", "/bin/bash"},
-		{"sh", "/bin/sh"},
-		{"python3", "/usr/bin/python3"},
-		{"python", "/usr/bin/python3"},
-		{"node", "/usr/bin/node"},
-		{"ruby", "/usr/bin/ruby"},
-		{"perl", "/usr/bin/perl"},
-		{"custom-interp", "custom-interp"},
+		{"bash", "/bin/bash", false},
+		{"sh", "/bin/sh", false},
+		{"python3", "/usr/bin/python3", false},
+		{"python", "/usr/bin/python3", false},
+		{"node", "/usr/bin/node", false},
+		{"ruby", "/usr/bin/ruby", false},
+		{"perl", "/usr/bin/perl", false},
+		{"custom-interp", "", true},
+		{"/bin/bash", "", true},
+		{"../../../usr/bin/evil", "", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			got := interpreterToPath(tc.input)
+			got, err := interpreterToPath(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for interpreter %q, got %q", tc.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if got != tc.want {
 				t.Errorf("interpreterToPath(%q) = %q, want %q", tc.input, got, tc.want)
 			}
@@ -439,7 +455,10 @@ func TestToArgs_ScriptArgsUsesInterpreter(t *testing.T) {
 		MemoryMB:  64,
 		WorkDir:   "/work",
 	}
-	args := cfg.ScriptArgs("task-interp", "python3", "/tmp/script.py")
+	args, err := cfg.ScriptArgs("task-interp", "python3", "/tmp/script.py")
+	if err != nil {
+		t.Fatalf("ScriptArgs() error: %v", err)
+	}
 	argStr := strings.Join(args, " ")
 
 	// python3 maps to /usr/bin/python3.

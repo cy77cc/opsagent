@@ -114,11 +114,14 @@ func (c *NsjailConfig) CommandArgs(taskID string, command string, cmdArgs []stri
 }
 
 // ScriptArgs appends the interpreter invocation to the nsjail args using a script file path.
-func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptPath string) []string {
-	interpPath := interpreterToPath(interpreter)
+func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptPath string) ([]string, error) {
+	interpPath, err := interpreterToPath(interpreter)
+	if err != nil {
+		return nil, err
+	}
 	args := c.ToArgs(taskID)
 	args = append(args, "--", interpPath, scriptPath)
-	return args
+	return args, nil
 }
 
 // WriteScriptFile writes script content to a temporary file and returns its path.
@@ -181,23 +184,24 @@ func (c *NsjailConfig) buildConfigContent(taskID string) string {
 }
 
 // interpreterToPath maps a short interpreter name to its absolute path.
-func interpreterToPath(interpreter string) string {
+// Returns an error for unknown interpreters to prevent arbitrary binary execution.
+func interpreterToPath(interpreter string) (string, error) {
 	switch interpreter {
 	case "bash":
-		return "/bin/bash"
+		return "/bin/bash", nil
 	case "sh":
-		return "/bin/sh"
+		return "/bin/sh", nil
 	case "python3":
-		return "/usr/bin/python3"
+		return "/usr/bin/python3", nil
 	case "python":
-		return "/usr/bin/python3"
+		return "/usr/bin/python3", nil
 	case "ruby":
-		return "/usr/bin/ruby"
+		return "/usr/bin/ruby", nil
 	case "node":
-		return "/usr/bin/node"
+		return "/usr/bin/node", nil
 	case "perl":
-		return "/usr/bin/perl"
+		return "/usr/bin/perl", nil
 	default:
-		return interpreter
+		return "", fmt.Errorf("unsupported interpreter %q", interpreter)
 	}
 }

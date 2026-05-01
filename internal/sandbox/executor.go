@@ -143,7 +143,10 @@ func (e *Executor) ExecuteScript(ctx context.Context, req ExecRequest, outputSen
 	}
 	defer os.Remove(scriptPath)
 
-	args := nsCfg.ScriptArgs(req.TaskID, req.Interpreter, scriptPath)
+	args, err := nsCfg.ScriptArgs(req.TaskID, req.Interpreter, scriptPath)
+	if err != nil {
+		return nil, fmt.Errorf("script args: %w", err)
+	}
 	return e.run(ctx, req, nsCfg, args, outputSender)
 }
 
