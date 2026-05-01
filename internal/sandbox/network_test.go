@@ -91,3 +91,28 @@ func TestRunCmd_WithArgs(t *testing.T) {
 		t.Fatalf("expected 'echo hello world' to succeed, got: %v", err)
 	}
 }
+
+func TestValidateIPList(t *testing.T) {
+	tests := []struct {
+		name    string
+		ips     []string
+		wantErr bool
+	}{
+		{"valid IPs", []string{"10.0.0.1", "192.168.1.1"}, false},
+		{"valid CIDR", []string{"10.0.0.0/8", "192.168.0.0/16"}, false},
+		{"empty list", []string{}, false},
+		{"invalid IP", []string{"not-an-ip"}, true},
+		{"injection attempt", []string{"0.0.0.0/0 -j ACCEPT --dport 22"}, true},
+		{"iptables flag", []string{"-A"}, true},
+		{"empty string", []string{""}, true},
+		{"mixed valid invalid", []string{"10.0.0.1", "bad"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateIPList(tt.ips)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateIPList(%v) error = %v, wantErr %v", tt.ips, err, tt.wantErr)
+			}
+		})
+	}
+}

@@ -2,7 +2,9 @@ package sandbox
 
 import (
 	"fmt"
+	"net"
 	"os/exec"
+	"strings"
 )
 
 // NetworkManager manages network isolation for sandbox tasks.
@@ -33,6 +35,9 @@ func (nm *NetworkManager) SetupAllowlistNetwork(taskID string, allowedIPs []stri
 	}
 	if !nm.enabled {
 		return fmt.Errorf("network manager is not enabled")
+	}
+	if err := validateIPList(allowedIPs); err != nil {
+		return fmt.Errorf("invalid allowed IPs: %w", err)
 	}
 
 	vethHost := fmt.Sprintf("veth-h-%s", truncateID(taskID, 8))
@@ -76,6 +81,28 @@ func (nm *NetworkManager) CleanupNetwork(taskID string) error {
 	if err := runCmd("ip", "link", "del", vethHost); err != nil {
 		// Ignore "does not exist" errors during cleanup.
 		return nil
+	}
+	return nil
+}
+
+// validateIPList checks that every entry in ips is a valid IP address or CIDR.
+// It rejects empty strings, non-IP text, and anything that could be used to
+// inject extra iptables arguments.
+func validateIPList(ips []string) error {
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			return fmt.Errorf("empty IP address")
+		}
+		if strings.Contains(ip, "/") {
+			if _, _, err := net.ParseCIDR(ip); err != nil {
+				return fmt.Errorf("invalid CIDR %q: %w", ip, err)
+			}
+		} else {
+			if net.ParseIP(ip) == nil {
+				return fmt.Errorf("invalid IP address %q", ip)
+			}
+		}
 	}
 	return nil
 }
