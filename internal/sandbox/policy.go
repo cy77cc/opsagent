@@ -24,6 +24,11 @@ func (p *Policy) ValidateCommand(command string, args []string) error {
 		return fmt.Errorf("command is required")
 	}
 
+	// Reject command names containing shell metacharacters to prevent injection.
+	if containsShellMetacharacters(cmdName) {
+		return fmt.Errorf("command name contains shell metacharacters: %q", cmdName)
+	}
+
 	// Check blocked commands first — they always take precedence.
 	blocked := toSet(p.BlockedCommands)
 	if _, ok := blocked[cmdName]; ok {

@@ -37,6 +37,30 @@ func TestSanitizeTaskID(t *testing.T) {
 	}
 }
 
+func TestValidateCommandNameMetacharacters(t *testing.T) {
+	// Use an empty allowed list so only the metacharacter check can catch injection.
+	p := Policy{}
+	tests := []struct {
+		name    string
+		command string
+		wantErr bool
+	}{
+		{"valid command", "ls", false},
+		{"semicolon injection", "ls;rm -rf /", true},
+		{"pipe injection", "ls|cat", true},
+		{"backtick injection", "ls`whoami`", true},
+		{"dollar injection", "ls$(whoami)", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := p.ValidateCommand(tt.command, nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateCommand(%q) error = %v, wantErr %v", tt.command, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestSeccompPolicyString(t *testing.T) {
 	tests := []struct {
 		name        string

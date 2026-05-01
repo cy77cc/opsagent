@@ -104,12 +104,13 @@ func (c *NsjailConfig) ToArgs(taskID string) []string {
 	)
 
 	// Read-only bind mounts for system directories.
-	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin", "/etc"} {
+	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin"} {
 		args = append(args, fmt.Sprintf("--bindmount_ro=%s", dir))
 	}
 
 	// tmpfs for writable scratch space.
 	args = append(args,
+		"--tmpfsmount=/etc:tmpfs:size=1048576",
 		"--tmpfsmount=/tmp:tmpfs:size=67108864",
 		"--tmpfsmount=/work:tmpfs:size=134217728",
 	)
@@ -218,9 +219,10 @@ func (c *NsjailConfig) buildConfigContent(taskID string) string {
 	s += "cgroup_pids_max: " + strconv.Itoa(c.MaxPIDs) + "\n"
 
 	// Mounts.
-	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin", "/etc"} {
+	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin"} {
 		s += fmt.Sprintf("mount { src: %q dst: %q is_bind: true rw: false }\n", dir, dir)
 	}
+	s += "mount { dst: \"/etc\" fstype: \"tmpfs\" options: \"size=1048576\" rw: true }\n"
 	s += "mount { dst: \"/tmp\" fstype: \"tmpfs\" options: \"size=67108864\" rw: true }\n"
 	s += "mount { dst: \"/work\" fstype: \"tmpfs\" options: \"size=134217728\" rw: true }\n"
 

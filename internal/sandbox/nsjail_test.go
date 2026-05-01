@@ -44,13 +44,19 @@ func TestNsjailConfigGenerate(t *testing.T) {
 	if !strings.Contains(argStr, "--gid_mapping=0:65534:1") {
 		t.Error("expected gid_mapping")
 	}
-	// Bind mounts.
-	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin", "/etc"} {
+	// Bind mounts — /etc is NOT bind-mounted (uses tmpfs instead).
+	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin"} {
 		if !strings.Contains(argStr, "--bindmount_ro="+dir) {
 			t.Errorf("expected bindmount_ro=%s", dir)
 		}
 	}
+	if strings.Contains(argStr, "--bindmount_ro=/etc") {
+		t.Error("expected no bindmount_ro for /etc (should be tmpfs)")
+	}
 	// tmpfs.
+	if !strings.Contains(argStr, "--tmpfsmount=/etc:tmpfs:size=1048576") {
+		t.Error("expected tmpfsmount=/etc")
+	}
 	if !strings.Contains(argStr, "--tmpfsmount=/tmp") {
 		t.Error("expected tmpfsmount=/tmp")
 	}
@@ -133,15 +139,22 @@ func TestBuildConfigContentBasic(t *testing.T) {
 		t.Error("expected cgroup_pids_max: 32")
 	}
 
-	// Read-only bind mounts.
-	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin", "/etc"} {
+	// Read-only bind mounts — /etc is NOT bind-mounted (uses tmpfs instead).
+	for _, dir := range []string{"/usr", "/lib", "/lib64", "/bin"} {
 		expected := fmt.Sprintf(`src: %q dst: %q is_bind: true rw: false`, dir, dir)
 		if !strings.Contains(content, expected) {
 			t.Errorf("expected bindmount_ro for %s", dir)
 		}
 	}
+	// /etc should be tmpfs, not a bind mount.
+	if strings.Contains(content, `src: "/etc"`) {
+		t.Error("expected no bind mount for /etc (should be tmpfs)")
+	}
 
 	// tmpfs mounts.
+	if !strings.Contains(content, `dst: "/etc"`) {
+		t.Error("expected tmpfs mount for /etc")
+	}
 	if !strings.Contains(content, `dst: "/tmp"`) {
 		t.Error("expected tmpfs mount for /tmp")
 	}

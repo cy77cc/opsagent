@@ -309,13 +309,13 @@ func (e *Executor) buildNsjailConfig(req ExecRequest) NsjailConfig {
 
 	if req.SandboxCfg != nil {
 		if req.SandboxCfg.MemoryMB > 0 {
-			cfg.MemoryMB = req.SandboxCfg.MemoryMB
+			cfg.MemoryMB = min(req.SandboxCfg.MemoryMB, 1024)
 		}
 		if req.SandboxCfg.CPUPercent > 0 {
-			cfg.CPUPercent = req.SandboxCfg.CPUPercent
+			cfg.CPUPercent = min(req.SandboxCfg.CPUPercent, 100)
 		}
 		if req.SandboxCfg.MaxPIDs > 0 {
-			cfg.MaxPIDs = req.SandboxCfg.MaxPIDs
+			cfg.MaxPIDs = min(req.SandboxCfg.MaxPIDs, 256)
 		}
 		if req.SandboxCfg.NetworkMode != "" {
 			cfg.NetworkMode = req.SandboxCfg.NetworkMode
