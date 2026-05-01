@@ -204,6 +204,28 @@ func TestPrometheusOutput_LabelSorting(t *testing.T) {
 	}
 }
 
+func TestEscapeLabelValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no special chars", "hello", "hello"},
+		{"double quote", `foo"bar`, `foo\"bar`},
+		{"backslash", `foo\bar`, `foo\\bar`},
+		{"newline", "foo\nbar", `foo\nbar`},
+		{"all special", "\"\\\n", `\"` + `\\` + `\n`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := escapeLabelValue(tt.input)
+			if got != tt.want {
+				t.Errorf("escapeLabelValue(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPrometheusOutput_Timestamp(t *testing.T) {
 	p := &PrometheusOutput{}
 	if err := p.Init(map[string]interface{}{}); err != nil {

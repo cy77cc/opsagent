@@ -18,7 +18,7 @@ import (
 
 const (
 	defaultPath = "/metrics"
-	defaultAddr = ":9100"
+	defaultAddr = "127.0.0.1:9100"
 )
 
 var invalidNameChars = regexp.MustCompile(`[^a-zA-Z0-9_]`)
@@ -159,7 +159,7 @@ func (p *PrometheusOutput) renderPrometheus() string {
 				}
 				sb.WriteString(SanitizeName(k))
 				sb.WriteString("=\"")
-				sb.WriteString(tags[k])
+				sb.WriteString(escapeLabelValue(tags[k]))
 				sb.WriteString("\"")
 			}
 			sb.WriteString("}")
@@ -178,6 +178,13 @@ func (p *PrometheusOutput) renderPrometheus() string {
 	}
 
 	return sb.String()
+}
+
+func escapeLabelValue(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	return s
 }
 
 // SanitizeName replaces invalid characters with underscores and ensures
