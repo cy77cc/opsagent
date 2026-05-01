@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/cy77cc/opsagent/internal/config"
 )
 
@@ -21,6 +23,15 @@ func (r *AuthReloader) CanReload(cs *config.ChangeSet) bool {
 
 // Apply updates the server's auth config.
 func (r *AuthReloader) Apply(newCfg *config.Config) error {
+	if !newCfg.Auth.Enabled {
+		return fmt.Errorf("auth cannot be disabled via hot-reload (restart required)")
+	}
+	if newCfg.Auth.BearerToken == "" {
+		return fmt.Errorf("bearer_token cannot be empty")
+	}
+	if len(newCfg.Auth.BearerToken) < 32 {
+		return fmt.Errorf("bearer_token must be at least 32 characters")
+	}
 	r.server.UpdateAuth(AuthConfig{
 		Enabled:     newCfg.Auth.Enabled,
 		BearerToken: newCfg.Auth.BearerToken,

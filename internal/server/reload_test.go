@@ -50,7 +50,7 @@ func TestAuthReloader_ApplyRollback(t *testing.T) {
 	s := newTestServerWithOpts(Options{Auth: AuthConfig{Enabled: false}})
 	r := NewAuthReloader(s)
 
-	newCfg := &config.Config{Auth: config.AuthConfig{Enabled: true, BearerToken: "tok"}}
+	newCfg := &config.Config{Auth: config.AuthConfig{Enabled: true, BearerToken: "01234567890123456789012345678901"}}
 	if err := r.Apply(newCfg); err != nil {
 		t.Fatalf("Apply failed: %v", err)
 	}
@@ -64,6 +64,41 @@ func TestAuthReloader_ApplyRollback(t *testing.T) {
 	}
 	if s.GetAuth().Enabled {
 		t.Error("expected auth disabled after Rollback")
+	}
+}
+
+func TestAuthReloaderRejectsDisable(t *testing.T) {
+	s := &Server{}
+	s.options.Auth.Enabled = true
+	s.options.Auth.BearerToken = "01234567890123456789012345678901"
+
+	r := NewAuthReloader(s)
+
+	// Try to disable auth
+	newCfg := &config.Config{}
+	newCfg.Auth.Enabled = false
+	newCfg.Auth.BearerToken = "01234567890123456789012345678901"
+
+	err := r.Apply(newCfg)
+	if err == nil {
+		t.Error("expected error when disabling auth via hot-reload")
+	}
+}
+
+func TestAuthReloaderRejectsEmptyToken(t *testing.T) {
+	s := &Server{}
+	s.options.Auth.Enabled = true
+	s.options.Auth.BearerToken = "01234567890123456789012345678901"
+
+	r := NewAuthReloader(s)
+
+	newCfg := &config.Config{}
+	newCfg.Auth.Enabled = true
+	newCfg.Auth.BearerToken = ""
+
+	err := r.Apply(newCfg)
+	if err == nil {
+		t.Error("expected error for empty bearer token")
 	}
 }
 
