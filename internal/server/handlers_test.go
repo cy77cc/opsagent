@@ -273,6 +273,34 @@ func TestHandleTask_BadJSON(t *testing.T) {
 	}
 }
 
+func TestHandleExec_RejectsOversizedBody(t *testing.T) {
+	s := newTestServer(t)
+
+	bigBody := `{"command":"echo","args":["` + strings.Repeat("x", 2*1024*1024) + `"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/exec", strings.NewReader(bigBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d", w.Code)
+	}
+}
+
+func TestHandleTask_RejectsOversizedBody(t *testing.T) {
+	s := newTestServer(t)
+
+	bigBody := `{"type":"test","payload":{"data":"` + strings.Repeat("x", 2*1024*1024) + `"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", strings.NewReader(bigBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d", w.Code)
+	}
+}
+
 func TestParseTimeoutSeconds(t *testing.T) {
 	tests := []struct {
 		name  string
