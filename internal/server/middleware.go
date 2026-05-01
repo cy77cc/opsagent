@@ -4,11 +4,52 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
+type rateLimiter struct {
+	visitors map[string]*rate.Limiter
+	mu       sync.Mutex
+	rate     rate.Limit
+	burst    int
+}
+
+func newRateLimiter(r rate.Limit, burst int) *rateLimiter {
+	return &rateLimiter{
+		visitors: make(map[string]*rate.Limiter),
+		rate:     r,
+		burst:    burst,
+	}
+}
+
+func (rl *rateLimiter) getLimiter(ip string) *rate.Limiter {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	if lim, ok := rl.visitors[ip]; ok {
+		return lim
+	}
+	lim := rate.NewLimiter(rl.rate, rl.burst)
+	rl.visitors[ip] = lim
+	return lim
+}
+
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
-	return s.recoverMiddleware(s.securityHeadersMiddleware(s.loggingMiddleware(s.authMiddleware(next))))
+	return s.recoverMiddleware(s.securityHeadersMiddleware(s.rateLimitMiddleware(s.loggingMiddleware(s.authMiddleware(next)))))
+}
+
+func (s *Server) rateLimitMiddleware(next http.Handler) http.Handler {
+	rl := newRateLimiter(10, 20) // 10 req/s, burst of 20
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		if !rl.getLimiter(ip).Allow() {
+			writeJSON(w, http.StatusTooManyRequests, apiResponse{Success: false, Error: "rate limit exceeded"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {

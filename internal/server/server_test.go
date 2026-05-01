@@ -72,6 +72,33 @@ func TestServerStartAndShutdown(t *testing.T) {
 	}
 }
 
+func TestRateLimiting(t *testing.T) {
+	s := newTestServer(t)
+
+	// Send many requests rapidly
+	for i := 0; i < 25; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		req.RemoteAddr = "10.0.0.1:12345"
+		w := httptest.NewRecorder()
+		s.httpServer.Handler.ServeHTTP(w, req)
+
+		if i < 20 {
+			// First 20 should succeed (burst)
+			if w.Code == http.StatusTooManyRequests {
+				t.Errorf("request %d got rate limited too early", i)
+			}
+		}
+	}
+	// The 25th should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected 429, got %d", w.Code)
+	}
+}
+
 func TestServerSetLatestMetric(t *testing.T) {
 	log := zerolog.Nop()
 	srv := New(":0", log, &executor.Executor{}, task.NewDispatcher(), time.Now(), Options{})
