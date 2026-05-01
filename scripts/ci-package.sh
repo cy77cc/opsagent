@@ -52,7 +52,7 @@ RestartSec=5
 LimitNOFILE=65536
 
 # Security hardening
-NoNewPrivileges=false
+NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/var/log/${APP_NAME} /tmp/${APP_NAME}
 ProtectHome=true
