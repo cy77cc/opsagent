@@ -84,6 +84,10 @@ func ReadCgroupStats(cgroupPath string) (*Stats, error) {
 
 // CreateCgroup creates a new cgroup under the base path for the given task.
 func CreateCgroup(basePath, taskID string) (string, error) {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return "", err
+	}
 	cgroupPath := filepath.Join(basePath, fmt.Sprintf("sandbox-%s", taskID))
 	if err := os.MkdirAll(cgroupPath, 0o755); err != nil {
 		return "", fmt.Errorf("create cgroup %s: %w", cgroupPath, err)

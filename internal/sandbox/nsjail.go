@@ -5,7 +5,23 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
+
+// sanitizeTaskID validates that a task ID does not contain path traversal sequences.
+func sanitizeTaskID(taskID string) (string, error) {
+	if taskID == "" {
+		return "", fmt.Errorf("task ID is required")
+	}
+	cleaned := filepath.Clean(taskID)
+	if cleaned == ".." || strings.ContainsAny(cleaned, `/\`) {
+		return "", fmt.Errorf("invalid task ID: %q contains path traversal", taskID)
+	}
+	if strings.ContainsRune(cleaned, '\x00') {
+		return "", fmt.Errorf("invalid task ID: contains null byte")
+	}
+	return cleaned, nil
+}
 
 // seccompPolicy is a minimal syscall whitelist for sandboxed processes.
 // Only syscalls needed for basic process execution, I/O, and memory management are allowed.
@@ -126,6 +142,10 @@ func (c *NsjailConfig) ScriptArgs(taskID string, interpreter, scriptPath string)
 
 // WriteScriptFile writes script content to a temporary file and returns its path.
 func (c *NsjailConfig) WriteScriptFile(taskID, scriptContent string) (string, error) {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return "", err
+	}
 	scriptDir := filepath.Join(os.TempDir(), "nsjail-scripts")
 	if err := os.MkdirAll(scriptDir, 0o700); err != nil {
 		return "", fmt.Errorf("create script dir: %w", err)
@@ -139,6 +159,10 @@ func (c *NsjailConfig) WriteScriptFile(taskID, scriptContent string) (string, er
 
 // WriteConfigFile writes a minimal nsjail config file for the given task and returns its path.
 func (c *NsjailConfig) WriteConfigFile(taskID string) (string, error) {
+	taskID, err := sanitizeTaskID(taskID)
+	if err != nil {
+		return "", err
+	}
 	cfgDir := filepath.Join(os.TempDir(), "nsjail-cfg")
 	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
 		return "", fmt.Errorf("create nsjail config dir: %w", err)
