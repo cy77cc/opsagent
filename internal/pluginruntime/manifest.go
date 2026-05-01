@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -87,6 +88,15 @@ func LoadManifest(path string) (*PluginManifest, error) {
 	if !filepath.IsAbs(m.BinaryPath) {
 		m.BinaryPath = filepath.Join(m.resolvedDir, m.BinaryPath)
 	}
+
+	// Ensure the resolved binary path stays within the plugin directory.
+	cleanBin := filepath.Clean(m.BinaryPath)
+	cleanDir := filepath.Clean(m.resolvedDir)
+	if !strings.HasPrefix(cleanBin, cleanDir+string(filepath.Separator)) {
+		return nil, fmt.Errorf("binary_path %q escapes plugin directory %q", m.BinaryPath, m.resolvedDir)
+	}
+	m.BinaryPath = cleanBin
+
 	return m, nil
 }
 

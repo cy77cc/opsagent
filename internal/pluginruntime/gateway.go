@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,18 @@ import (
 	"github.com/cy77cc/opsagent/internal/health"
 	"github.com/rs/zerolog"
 )
+
+// validPluginName matches plugin names that are safe for use in file paths.
+var validPluginName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
+
+// sanitizePluginName validates that a plugin name contains only safe characters
+// (alphanumeric, hyphens, underscores) and does not start with a hyphen.
+func sanitizePluginName(name string) (string, error) {
+	if !validPluginName.MatchString(name) {
+		return "", fmt.Errorf("invalid plugin name %q: must be alphanumeric with hyphens/underscores", name)
+	}
+	return name, nil
+}
 
 // PluginStatus represents the state of a managed plugin.
 type PluginStatus string
@@ -319,13 +332,32 @@ func (g *Gateway) OnPluginUnloaded(fn func(name string, taskTypes []string)) {
 
 // loadPlugin starts a plugin process and establishes RPC connection.
 func (g *Gateway) loadPlugin(manifest *PluginManifest) error {
+	safeName, err := sanitizePluginName(manifest.Name)
+	if err != nil {
+		return fmt.Errorf("invalid plugin name: %w", err)
+	}
+
 	mergedCfg := mergePluginConfig(manifest.Config, g.cfg.PluginConfigs[manifest.Name])
 
 	// Apply merged config back to manifest for this session.
 	manifest.Config = mergedCfg
 
-	socketPath := fmt.Sprintf("/tmp/opsagent-plugin-%s.sock", manifest.Name)
-	_ = os.Remove(socketPath)
+	// Use a dedicated directory with restricted permissions for plugin sockets.
+	socketDir := filepath.Join(os.TempDir(), "opsagent-plugins")
+	if err := os.MkdirAll(socketDir, 0o700); err != nil {
+		return fmt.Errorf("create socket directory: %w", err)
+	}
+
+	socketPath := filepath.Join(socketDir, safeName+".sock")
+
+	// Defend against symlink/TOCTOU attacks: if the socket file exists,
+	// verify it is not a symlink before removing.
+	if fi, err := os.Lstat(socketPath); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("socket path %q is a symlink, refusing to remove", socketPath)
+		}
+		_ = os.Remove(socketPath)
+	}
 
 	proc, err := startProcess(manifest, socketPath)
 	if err != nil {
