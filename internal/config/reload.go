@@ -17,6 +17,9 @@ type Reloader interface {
 	Rollback(oldCfg *Config) error
 }
 
+// maxConfigYAMLSize is the maximum allowed size for a config YAML update (1 MB).
+const maxConfigYAMLSize = 1 << 20
+
 // ConfigReloader orchestrates config hot-reload with atomic rollback.
 type ConfigReloader struct {
 	current   *Config
@@ -59,6 +62,10 @@ func parseYAMLConfig(data []byte) (*Config, error) {
 
 // Apply parses newYAML, diffs against current config, and atomically applies reloadable changes.
 func (r *ConfigReloader) Apply(ctx context.Context, newYAML []byte) error {
+	if len(newYAML) > maxConfigYAMLSize {
+		return fmt.Errorf("config YAML too large: %d bytes (max %d)", len(newYAML), maxConfigYAMLSize)
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

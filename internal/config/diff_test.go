@@ -292,6 +292,27 @@ func TestDiff_GRPCFieldsChanged(t *testing.T) {
 	}
 }
 
+func TestMaskSecret(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"short", "abc", "***"},
+		{"4 chars", "abcd", "***"},
+		{"long", "abcdefghijklmnop", "ab***op"},
+		{"empty", "", "***"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := maskSecret(tt.input)
+			if got != tt.want {
+				t.Errorf("maskSecret(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDiff_ExecutorFieldsChanged(t *testing.T) {
 	old := &Config{
 		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},

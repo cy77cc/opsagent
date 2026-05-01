@@ -502,7 +502,7 @@ func (c *Client) FlushAndStop(ctx context.Context, persistPath string) error {
 			if err != nil {
 				c.logger.Error().Err(err).Msg("failed to marshal metrics for persistence")
 			} else {
-				if err := os.WriteFile(persistPath, data, 0644); err != nil {
+				if err := os.WriteFile(persistPath, data, 0600); err != nil {
 					c.logger.Error().Err(err).Str("path", persistPath).Msg("failed to persist cache")
 				} else {
 					c.logger.Info().Int("count", len(metrics)).Str("path", persistPath).Msg("cache persisted to disk")

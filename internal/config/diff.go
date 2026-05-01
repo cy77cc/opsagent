@@ -75,6 +75,16 @@ func Diff(old, new *Config) (*ChangeSet, []NonReloadableChange, error) {
 	return cs, nonReloadable, nil
 }
 
+// maskSecret returns a masked version of a secret string.
+// For strings longer than 4 characters, the first and last 2 characters are shown
+// with "***" in between. Shorter strings are fully masked.
+func maskSecret(s string) string {
+	if len(s) <= 4 {
+		return "***"
+	}
+	return s[:2] + "***" + s[len(s)-2:]
+}
+
 func diffReporter(old, new *Config) bool {
 	return old.Reporter != new.Reporter
 }
@@ -118,7 +128,7 @@ func diffGRPC(old, new *Config) []NonReloadableChange {
 		changes = append(changes, NonReloadableChange{"grpc.server_addr", old.GRPC.ServerAddr, new.GRPC.ServerAddr})
 	}
 	if old.GRPC.EnrollToken != new.GRPC.EnrollToken {
-		changes = append(changes, NonReloadableChange{"grpc.enroll_token", old.GRPC.EnrollToken, new.GRPC.EnrollToken})
+		changes = append(changes, NonReloadableChange{"grpc.enroll_token", maskSecret(old.GRPC.EnrollToken), maskSecret(new.GRPC.EnrollToken)})
 	}
 	if old.GRPC.MTLS != new.GRPC.MTLS {
 		changes = append(changes, NonReloadableChange{"grpc.mtls", old.GRPC.MTLS, new.GRPC.MTLS})

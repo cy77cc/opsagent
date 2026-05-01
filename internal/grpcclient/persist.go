@@ -36,7 +36,7 @@ func persistMetrics(metrics []*collector.Metric, path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // loadMetrics reads persisted metrics from a JSON file.
