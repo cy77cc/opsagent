@@ -206,3 +206,93 @@ func TestRegisteredInDefaultRegistry(t *testing.T) {
 		t.Fatal("expected non-nil aggregator from factory")
 	}
 }
+
+func TestInitValidConfig(t *testing.T) {
+	a := New(Config{})
+	cfg := map[string]interface{}{
+		"fields": []interface{}{"value", "latency"},
+	}
+	if err := a.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(a.fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(a.fields))
+	}
+	if a.fields[0] != "value" || a.fields[1] != "latency" {
+		t.Errorf("expected fields [value, latency], got %v", a.fields)
+	}
+}
+
+func TestInitMissingFieldsKey(t *testing.T) {
+	a := New(Config{Fields: []string{"old"}})
+	cfg := map[string]interface{}{}
+	if err := a.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Init resets internal state; fields should remain unchanged from Init's perspective
+	// (the "old" value from New is not preserved because Init doesn't set fields when key is missing).
+}
+
+func TestInitFieldsNotAList(t *testing.T) {
+	a := New(Config{})
+	cfg := map[string]interface{}{
+		"fields": "not a list",
+	}
+	err := a.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when fields is not a list")
+	}
+}
+
+func TestInitFieldEntryNotAString(t *testing.T) {
+	a := New(Config{})
+	cfg := map[string]interface{}{
+		"fields": []interface{}{123},
+	}
+	err := a.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when field entry is not a string")
+	}
+}
+
+func TestAddNonNumericFieldValues(t *testing.T) {
+	a := New(Config{Fields: []string{"value"}})
+
+	m1 := collector.NewMetric("cpu",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"value": "string_value"},
+		collector.Gauge, time.Now())
+	m2 := collector.NewMetric("cpu",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"value": true},
+		collector.Gauge, time.Now())
+	m3 := collector.NewMetric("cpu",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"value": float64(10)},
+		collector.Gauge, time.Now())
+
+	a.Add(m1)
+	a.Add(m2)
+	a.Add(m3)
+
+	acc := collector.NewAccumulator(10)
+	a.Push(acc)
+
+	collected := acc.Collect()
+	if len(collected) != 1 {
+		t.Fatalf("expected 1 metric, got %d", len(collected))
+	}
+
+	fields := collected[0].Fields()
+	val, ok := fields["value"]
+	if !ok {
+		t.Fatal("expected 'value' field")
+	}
+	fv, ok := val.(float64)
+	if !ok {
+		t.Fatalf("expected float64, got %T", val)
+	}
+	if fv != 10.0 {
+		t.Errorf("expected average 10.0 (only numeric counted), got %f", fv)
+	}
+}

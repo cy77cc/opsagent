@@ -1,6 +1,9 @@
 package sandbox
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNewNetworkManager(t *testing.T) {
 	nm := NewNetworkManager(true)
@@ -50,5 +53,41 @@ func TestCleanupNetwork(t *testing.T) {
 	// Cleanup should succeed even if the veth doesn't exist.
 	if err := nm.CleanupNetwork("nonexistent-task"); err != nil {
 		t.Fatalf("expected no error for cleanup of nonexistent task, got: %v", err)
+	}
+}
+
+func TestRunCmd_Success(t *testing.T) {
+	// "true" is a simple command that always succeeds.
+	if err := runCmd("true"); err != nil {
+		t.Fatalf("expected 'true' to succeed, got: %v", err)
+	}
+}
+
+func TestRunCmd_Error(t *testing.T) {
+	// "false" always exits with code 1.
+	err := runCmd("false")
+	if err == nil {
+		t.Fatal("expected 'false' to return an error")
+	}
+	// Verify error wrapping includes the command name and an ExitError.
+	if !strings.Contains(err.Error(), "false") {
+		t.Errorf("expected error to contain 'false', got: %v", err)
+	}
+}
+
+func TestRunCmd_NonexistentCommand(t *testing.T) {
+	err := runCmd("definitely-does-not-exist-command-12345")
+	if err == nil {
+		t.Fatal("expected error for nonexistent command")
+	}
+	if !strings.Contains(err.Error(), "definitely-does-not-exist-command-12345") {
+		t.Errorf("expected error to contain command name, got: %v", err)
+	}
+}
+
+func TestRunCmd_WithArgs(t *testing.T) {
+	// "echo" with args should succeed.
+	if err := runCmd("echo", "hello", "world"); err != nil {
+		t.Fatalf("expected 'echo hello world' to succeed, got: %v", err)
 	}
 }

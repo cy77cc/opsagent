@@ -2,6 +2,7 @@ package grpcclient
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -151,4 +152,154 @@ func TestReceiverHandle_NilMessage(t *testing.T) {
 		t.Fatal("Handle should return an error for nil message")
 	}
 	t.Logf("got expected error: %v", err)
+}
+
+func TestReceiverHandle_AckBranch(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_Ack{
+			Ack: &pb.Ack{
+				RefId:   "ref-123",
+				Success: true,
+				Error:   "",
+			},
+		},
+	}
+
+	err := r.Handle(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Handle ack returned unexpected error: %v", err)
+	}
+}
+
+func TestReceiverHandle_HandlerErrorPropagation(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+
+	expectedErr := fmt.Errorf("command handler failed")
+	r.SetCommandHandler(func(_ context.Context, _ *pb.ExecuteCommand) error {
+		return expectedErr
+	})
+
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_ExecCommand{
+			ExecCommand: &pb.ExecuteCommand{TaskId: "cmd-err", Command: "fail"},
+		},
+	}
+
+	err := r.Handle(context.Background(), msg)
+	if err == nil {
+		t.Fatal("expected error from handler")
+	}
+	if err.Error() != expectedErr.Error() {
+		t.Errorf("expected %q, got %q", expectedErr.Error(), err.Error())
+	}
+}
+
+func TestReceiverHandle_ScriptHandlerError(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+
+	expectedErr := fmt.Errorf("script handler failed")
+	r.SetScriptHandler(func(_ context.Context, _ *pb.ExecuteScript) error {
+		return expectedErr
+	})
+
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_ExecScript{
+			ExecScript: &pb.ExecuteScript{TaskId: "scr-err", Script: "bad"},
+		},
+	}
+
+	err := r.Handle(context.Background(), msg)
+	if err == nil {
+		t.Fatal("expected error from script handler")
+	}
+	if err != expectedErr {
+		t.Errorf("expected %v, got %v", expectedErr, err)
+	}
+}
+
+func TestReceiverHandle_CancelHandlerError(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+
+	expectedErr := fmt.Errorf("cancel handler failed")
+	r.SetCancelHandler(func(_ context.Context, _ *pb.CancelJob) error {
+		return expectedErr
+	})
+
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_CancelJob{
+			CancelJob: &pb.CancelJob{TaskId: "cancel-err", Reason: "test"},
+		},
+	}
+
+	err := r.Handle(context.Background(), msg)
+	if err == nil {
+		t.Fatal("expected error from cancel handler")
+	}
+	if err != expectedErr {
+		t.Errorf("expected %v, got %v", expectedErr, err)
+	}
+}
+
+func TestReceiverHandle_ConfigUpdateHandlerError(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+
+	expectedErr := fmt.Errorf("config handler failed")
+	r.SetConfigUpdateHandler(func(_ context.Context, _ *pb.ConfigUpdate) error {
+		return expectedErr
+	})
+
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_ConfigUpdate{
+			ConfigUpdate: &pb.ConfigUpdate{Version: 1},
+		},
+	}
+
+	err := r.Handle(context.Background(), msg)
+	if err == nil {
+		t.Fatal("expected error from config handler")
+	}
+	if err != expectedErr {
+		t.Errorf("expected %v, got %v", expectedErr, err)
+	}
+}
+
+func TestReceiverHandle_NilHandlerForScript(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_ExecScript{
+			ExecScript: &pb.ExecuteScript{TaskId: "scr-nil", Script: "echo hi"},
+		},
+	}
+	err := r.Handle(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Handle returned unexpected error with nil script handler: %v", err)
+	}
+}
+
+func TestReceiverHandle_NilHandlerForCancel(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_CancelJob{
+			CancelJob: &pb.CancelJob{TaskId: "cancel-nil", Reason: "test"},
+		},
+	}
+	err := r.Handle(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Handle returned unexpected error with nil cancel handler: %v", err)
+	}
+}
+
+func TestReceiverHandle_NilHandlerForConfigUpdate(t *testing.T) {
+	r := NewReceiver(zerolog.Nop())
+	msg := &pb.PlatformMessage{
+		Payload: &pb.PlatformMessage_ConfigUpdate{
+			ConfigUpdate: &pb.ConfigUpdate{Version: 1},
+		},
+	}
+	err := r.Handle(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Handle returned unexpected error with nil config handler: %v", err)
+	}
 }

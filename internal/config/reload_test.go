@@ -131,6 +131,18 @@ func TestConfigReloader_InvalidYAML(t *testing.T) {
 	}
 }
 
+func TestConfigReloader_Current(t *testing.T) {
+	oldCfg := baseConfig()
+	cr := NewConfigReloader(oldCfg, zerolog.Nop())
+	got := cr.Current()
+	if got != oldCfg {
+		t.Error("expected Current() to return the initial config")
+	}
+	if got.Agent.ID != "a" {
+		t.Errorf("expected agent ID 'a', got %q", got.Agent.ID)
+	}
+}
+
 func TestConfigReloader_RollbackOnFailure(t *testing.T) {
 	oldCfg := baseConfig()
 	authReloader := &mockReloader{

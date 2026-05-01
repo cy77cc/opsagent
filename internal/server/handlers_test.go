@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -306,5 +307,54 @@ func TestSetLatestMetric(t *testing.T) {
 	s.SetLatestMetric(&collector.MetricPayload{Collector: "test"})
 	if !s.LatestMetricExists() {
 		t.Error("expected metric to exist after set")
+	}
+}
+
+func TestHandleExec_Success(t *testing.T) {
+	log := zerolog.Nop()
+	exec := executor.New([]string{"echo"}, 1*time.Second, 1024)
+	s := New(":0", log, exec, task.NewDispatcher(), time.Now(), Options{})
+
+	body := `{"command":"echo","args":["hello"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/exec", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	s.handleExec(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp apiResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !resp.Success {
+		t.Error("expected success=true")
+	}
+}
+
+func TestHandleTask_Success(t *testing.T) {
+	log := zerolog.Nop()
+	dispatcher := task.NewDispatcher()
+	dispatcher.Register("ping", func(_ context.Context, _ task.AgentTask) (any, error) {
+		return map[string]string{"result": "pong"}, nil
+	})
+	s := New(":0", log, &executor.Executor{}, dispatcher, time.Now(), Options{})
+
+	body := `{"task_id":"1","type":"ping","payload":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	s.handleTask(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp apiResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !resp.Success {
+		t.Error("expected success=true")
 	}
 }

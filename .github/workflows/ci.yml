@@ -11,6 +11,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
 
 jobs:
   go:
@@ -51,7 +52,9 @@ jobs:
       - name: Test with coverage
         run: |
           go test -race -coverprofile=coverage.out -covermode=atomic ./...
-          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          # Exclude generated protobuf code from coverage calculation
+          grep -v '/grpcclient/proto/' coverage.out > coverage_filtered.out || true
+          COVERAGE=$(go tool cover -func=coverage_filtered.out | tail -1 | awk '{print $3}' | sed 's/%//')
           echo "Coverage: ${COVERAGE}%"
           if (( $(echo "$COVERAGE < 80" | bc -l) )); then
             echo "::error::Coverage ${COVERAGE}% is below 80% minimum"

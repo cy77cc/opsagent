@@ -143,3 +143,140 @@ func TestConcurrentSafety(t *testing.T) {
 	wg.Wait()
 	// No panic = pass.
 }
+
+func TestInitValidConfig(t *testing.T) {
+	a := New(Config{})
+	cfg := map[string]interface{}{
+		"fields": []interface{}{"value", "latency"},
+	}
+	if err := a.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(a.fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(a.fields))
+	}
+	if a.fields[0] != "value" || a.fields[1] != "latency" {
+		t.Errorf("expected fields [value, latency], got %v", a.fields)
+	}
+}
+
+func TestInitMissingFieldsKey(t *testing.T) {
+	a := New(Config{Fields: []string{"old"}})
+	cfg := map[string]interface{}{}
+	if err := a.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInitFieldsNotAList(t *testing.T) {
+	a := New(Config{})
+	cfg := map[string]interface{}{
+		"fields": "not a list",
+	}
+	err := a.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when fields is not a list")
+	}
+}
+
+func TestInitFieldEntryNotAString(t *testing.T) {
+	a := New(Config{})
+	cfg := map[string]interface{}{
+		"fields": []interface{}{123},
+	}
+	err := a.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when field entry is not a string")
+	}
+}
+
+func TestSampleConfig(t *testing.T) {
+	a := New(Config{})
+	cfg := a.SampleConfig()
+	if cfg == "" {
+		t.Error("expected non-empty sample config")
+	}
+}
+
+func TestAddInt64Values(t *testing.T) {
+	a := New(Config{Fields: []string{"count"}})
+
+	m1 := collector.NewMetric("requests",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"count": int64(100)},
+		collector.Counter, time.Now())
+	m2 := collector.NewMetric("requests",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"count": int64(300)},
+		collector.Counter, time.Now())
+
+	a.Add(m1)
+	a.Add(m2)
+
+	acc := collector.NewAccumulator(10)
+	a.Push(acc)
+
+	collected := acc.Collect()
+	if len(collected) != 2 {
+		t.Fatalf("expected 2 metrics (min+max), got %d", len(collected))
+	}
+
+	names := map[string]float64{}
+	for _, c := range collected {
+		fields := c.Fields()
+		for _, v := range fields {
+			fv := v.(float64)
+			names[c.Name()] = fv
+		}
+	}
+	if names["requests_min"] != 100.0 {
+		t.Errorf("expected min=100, got %v", names["requests_min"])
+	}
+	if names["requests_max"] != 300.0 {
+		t.Errorf("expected max=300, got %v", names["requests_max"])
+	}
+}
+
+func TestAddNonNumericFieldValues(t *testing.T) {
+	a := New(Config{Fields: []string{"value"}})
+
+	m1 := collector.NewMetric("cpu",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"value": "string_value"},
+		collector.Gauge, time.Now())
+	m2 := collector.NewMetric("cpu",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"value": true},
+		collector.Gauge, time.Now())
+	m3 := collector.NewMetric("cpu",
+		map[string]string{"host": "server"},
+		map[string]interface{}{"value": float64(42)},
+		collector.Gauge, time.Now())
+
+	a.Add(m1)
+	a.Add(m2)
+	a.Add(m3)
+
+	acc := collector.NewAccumulator(10)
+	a.Push(acc)
+
+	collected := acc.Collect()
+	if len(collected) != 2 {
+		t.Fatalf("expected 2 metrics (min+max), got %d", len(collected))
+	}
+
+	names := map[string]float64{}
+	for _, c := range collected {
+		fields := c.Fields()
+		for _, v := range fields {
+			fv := v.(float64)
+			names[c.Name()] = fv
+		}
+	}
+	if names["cpu_min"] != 42.0 {
+		t.Errorf("expected min=42 (non-numeric skipped), got %v", names["cpu_min"])
+	}
+	if names["cpu_max"] != 42.0 {
+		t.Errorf("expected max=42 (non-numeric skipped), got %v", names["cpu_max"])
+	}
+}

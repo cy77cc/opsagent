@@ -164,3 +164,163 @@ func TestDiff_AuthChanged(t *testing.T) {
 		t.Errorf("expected 0 non-reloadable, got %d", len(nonReloadable))
 	}
 }
+
+func TestDiff_SandboxChanged(t *testing.T) {
+	old := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+		Sandbox:  SandboxConfig{Enabled: false},
+	}
+	newCfg := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+		Sandbox:  SandboxConfig{Enabled: true, NsjailPath: "/usr/bin/nsjail", BaseWorkdir: "/work", DefaultTimeoutSeconds: 30, MaxConcurrentTasks: 4, CgroupBasePath: "/sys/fs/cgroup", AuditLogPath: "/var/log/audit.log", Policy: PolicyConfig{AllowedCommands: []string{"echo"}, ScriptMaxBytes: 65536}},
+	}
+	_, nonReloadable, err := Diff(old, newCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, nr := range nonReloadable {
+		if nr.Field == "sandbox.*" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected sandbox.* in non-reloadable list")
+	}
+}
+
+func TestDiff_PluginChanged(t *testing.T) {
+	old := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+		Plugin:   PluginConfig{Enabled: false},
+	}
+	newCfg := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+		Plugin:   PluginConfig{Enabled: true, SocketPath: "/tmp/sock", StartupTimeoutSeconds: 5, RequestTimeoutSeconds: 30, MaxConcurrentTasks: 4, MaxResultBytes: 1024, ChunkSizeBytes: 256, SandboxProfile: "strict"},
+	}
+	_, nonReloadable, err := Diff(old, newCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, nr := range nonReloadable {
+		if nr.Field == "plugin.*" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected plugin.* in non-reloadable list")
+	}
+}
+
+func TestDiff_AgentNameChanged(t *testing.T) {
+	old := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n1", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+	}
+	newCfg := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n2", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+	}
+	_, nonReloadable, err := Diff(old, newCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, nr := range nonReloadable {
+		if nr.Field == "agent.name" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected agent.name in non-reloadable list")
+	}
+}
+
+func TestDiff_GRPCFieldsChanged(t *testing.T) {
+	old := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", EnrollToken: "tok1", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000, CachePersistPath: "/tmp/c"},
+	}
+	newCfg := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "y:443", EnrollToken: "tok2", HeartbeatIntervalSeconds: 20, ReconnectInitialBackoffMS: 2000, ReconnectMaxBackoffMS: 60000, CachePersistPath: "/tmp/d"},
+	}
+	_, nonReloadable, err := Diff(old, newCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expectedFields := []string{"grpc.server_addr", "grpc.enroll_token", "grpc.heartbeat_interval_seconds", "grpc.reconnect_initial_backoff_ms", "grpc.reconnect_max_backoff_ms", "grpc.cache_persist_path"}
+	for _, field := range expectedFields {
+		found := false
+		for _, nr := range nonReloadable {
+			if nr.Field == field {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected %s in non-reloadable list", field)
+		}
+	}
+}
+
+func TestDiff_ExecutorFieldsChanged(t *testing.T) {
+	old := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 10, AllowedCommands: []string{"ls"}, MaxOutputBytes: 1024},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+	}
+	newCfg := &Config{
+		Agent:    AgentConfig{ID: "a", Name: "n", IntervalSeconds: 10},
+		Server:   ServerConfig{ListenAddr: ":8080"},
+		Executor: ExecutorConfig{TimeoutSeconds: 20, AllowedCommands: []string{"ls", "ps"}, MaxOutputBytes: 2048},
+		Reporter: ReporterConfig{Mode: "stdout", TimeoutSeconds: 5},
+		GRPC:     GRPCConfig{ServerAddr: "x:443", HeartbeatIntervalSeconds: 15, ReconnectInitialBackoffMS: 1000, ReconnectMaxBackoffMS: 30000},
+	}
+	_, nonReloadable, err := Diff(old, newCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expectedFields := []string{"executor.timeout_seconds", "executor.allowed_commands", "executor.max_output_bytes"}
+	for _, field := range expectedFields {
+		found := false
+		for _, nr := range nonReloadable {
+			if nr.Field == field {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected %s in non-reloadable list", field)
+		}
+	}
+}

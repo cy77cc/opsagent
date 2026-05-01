@@ -14,10 +14,16 @@ var (
 )
 
 func main() {
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// run sets build-time metadata and executes the root command. Extracted from
+// main so it can be tested without calling os.Exit.
+func run() error {
 	app.Version = version
 	app.GitCommit = gitCommit
 	app.BuildTime = buildTime
-	if err := app.NewRootCommand().Execute(); err != nil {
-		os.Exit(1)
-	}
+	return app.NewRootCommand().Execute()
 }

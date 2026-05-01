@@ -335,6 +335,524 @@ func TestFlushAndStop_PersistsOnStreamUnavailable(t *testing.T) {
 	}
 }
 
+func TestHealthStatus_Disconnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	status := c.HealthStatus()
+	if status.Status != "disconnected" {
+		t.Errorf("expected disconnected, got %s", status.Status)
+	}
+}
+
+func TestHealthStatus_Connected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	c.mu.Lock()
+	c.connected = true
+	c.mu.Unlock()
+
+	status := c.HealthStatus()
+	if status.Status != "connected" {
+		t.Errorf("expected connected, got %s", status.Status)
+	}
+}
+
+func TestSendExecOutput_DropsWhenDisconnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	// Should not panic when disconnected.
+	c.SendExecOutput("task-1", "stdout", []byte("hello"))
+}
+
+func TestSendExecOutput_SendsWhenConnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	c.SendExecOutput("task-1", "stdout", []byte("output"))
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+}
+
+func TestSendExecOutput_SendFailure(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{
+		sendFn: func(*pb.AgentMessage) error {
+			return fmt.Errorf("send failed")
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	// Should not panic on send failure.
+	c.SendExecOutput("task-1", "stderr", []byte("err"))
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+}
+
+func TestSendExecResult_DropsWhenDisconnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	result := &ExecResult{TaskID: "task-1", ExitCode: 0}
+	// Should not panic when disconnected.
+	c.SendExecResult(result)
+}
+
+func TestSendExecResult_SendsWhenConnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	result := &ExecResult{TaskID: "task-2", ExitCode: 1, Duration: 3 * time.Second}
+	c.SendExecResult(result)
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+}
+
+func TestSendExecResult_SendFailure(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{
+		sendFn: func(*pb.AgentMessage) error {
+			return fmt.Errorf("send failed")
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	result := &ExecResult{TaskID: "task-3", ExitCode: 0}
+	// Should not panic on send failure.
+	c.SendExecResult(result)
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+}
+
+func TestSetOnStateChange(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	var called bool
+	c.SetOnStateChange(func(connected bool) {
+		called = true
+	})
+
+	// Trigger a state change via setConnected.
+	c.setConnected(true)
+
+	if !called {
+		t.Error("expected onStateChange callback to be called")
+	}
+}
+
+func TestSetConnected_NoDuplicateCallback(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	callCount := 0
+	c.SetOnStateChange(func(connected bool) {
+		callCount++
+	})
+
+	// Setting same state should not trigger callback.
+	c.setConnected(false) // already false by default
+	if callCount != 0 {
+		t.Errorf("expected 0 callback calls, got %d", callCount)
+	}
+
+	// Setting to true should trigger.
+	c.setConnected(true)
+	if callCount != 1 {
+		t.Errorf("expected 1 callback call, got %d", callCount)
+	}
+
+	// Setting to true again should not trigger.
+	c.setConnected(true)
+	if callCount != 1 {
+		t.Errorf("expected 1 callback call, got %d", callCount)
+	}
+
+	// Setting back to false should trigger.
+	c.setConnected(false)
+	if callCount != 2 {
+		t.Errorf("expected 2 callback calls, got %d", callCount)
+	}
+}
+
+func TestSetConnected_NilCallback(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	// Should not panic with nil callback.
+	c.setConnected(true)
+	c.setConnected(false)
+}
+
+func TestSendMetrics_SendsWhenConnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	m := collector.NewMetric("test", nil, map[string]interface{}{"v": 1.0}, collector.Gauge, time.Now())
+	c.SendMetrics([]*collector.Metric{m})
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+	if got := c.cache.Len(); got != 0 {
+		t.Errorf("expected cache empty after successful send, got %d", got)
+	}
+}
+
+func TestSendMetrics_CachesOnSendFailure(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{
+		sendFn: func(*pb.AgentMessage) error {
+			return fmt.Errorf("send failed")
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	m := collector.NewMetric("test", nil, map[string]interface{}{"v": 1.0}, collector.Gauge, time.Now())
+	c.SendMetrics([]*collector.Metric{m})
+
+	if got := c.cache.Len(); got != 1 {
+		t.Errorf("expected 1 cached metric after send failure, got %d", got)
+	}
+}
+
+func TestBuildTLSCredentials_InvalidCAPEM(t *testing.T) {
+	// Write a file that looks like PEM but contains garbage.
+	tmpFile := t.TempDir() + "/bad-ca.pem"
+	os.WriteFile(tmpFile, []byte("not a valid PEM certificate"), 0644)
+
+	cfg := DefaultConfig()
+	cfg.CAPath = tmpFile
+	c := NewClient(cfg, zerolog.Nop(), nil)
+	_, err := c.buildTLSCredentials()
+	if err == nil {
+		t.Error("expected error for invalid PEM CA file")
+	}
+}
+
+func TestBuildTLSCredentials_CAOnlyPath(t *testing.T) {
+	// When only CAPath is set (no client cert), should build server-verified TLS.
+	// Use a self-signed CA PEM for this test. Since we can't easily generate one,
+	// we test that setting only CAPath without CertPath/KeyPath does not error
+	// on the cert loading path (it will error on CA file read if nonexistent).
+	cfg := DefaultConfig()
+	cfg.CAPath = "/nonexistent/ca.pem"
+	cfg.CertPath = ""
+	cfg.KeyPath = ""
+	c := NewClient(cfg, zerolog.Nop(), nil)
+	_, err := c.buildTLSCredentials()
+	if err == nil {
+		t.Error("expected error for nonexistent CA file with CA-only path")
+	}
+}
+
+func TestConnect_InvalidServerAddress(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.ServerAddr = "not-a-valid-address:99999"
+	c := NewClient(cfg, zerolog.Nop(), nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := c.connect(ctx)
+	if err == nil {
+		t.Error("expected error connecting to invalid address")
+	}
+}
+
+func TestConnect_EmptyServerAddress(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.ServerAddr = ""
+	c := NewClient(cfg, zerolog.Nop(), nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := c.connect(ctx)
+	// grpc.NewClient with empty address may or may not fail immediately,
+	// but the Connect stream call should fail.
+	if err == nil {
+		t.Error("expected error connecting to empty address")
+	}
+}
+
+func TestCloseConn_WithMockStream(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	c.closeConn()
+
+	c.mu.Lock()
+	connected := c.connected
+	stream := c.stream
+	c.mu.Unlock()
+
+	if connected {
+		t.Error("expected connected=false after closeConn")
+	}
+	if stream != nil {
+		t.Error("expected nil stream after closeConn")
+	}
+}
+
+func TestCloseConn_Idempotent(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	// Calling closeConn multiple times should not panic.
+	c.closeConn()
+	c.closeConn()
+}
+
+func TestSendHeartbeat_WhenConnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	c.sendHeartbeat()
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+}
+
+func TestSendHeartbeat_WhenDisconnected(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	// Should not panic or send when disconnected.
+	c.sendHeartbeat()
+}
+
+func TestSendHeartbeat_SendFailure(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{
+		sendFn: func(*pb.AgentMessage) error {
+			return fmt.Errorf("send failed")
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	// Should not panic on send failure.
+	c.sendHeartbeat()
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+}
+
+func TestMessageLoop_EOF(t *testing.T) {
+	c := NewClient(Config{HeartbeatSeconds: 1}, zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{
+		recvFn: func() (*pb.PlatformMessage, error) {
+			return nil, io.EOF
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// messageLoop should return after EOF.
+	c.messageLoop(ctx)
+
+	if c.IsConnected() {
+		t.Error("expected disconnected after EOF")
+	}
+}
+
+func TestMessageLoop_RecvError(t *testing.T) {
+	c := NewClient(Config{HeartbeatSeconds: 1}, zerolog.Nop(), nil)
+
+	mock := &mockConnectStream{
+		recvFn: func() (*pb.PlatformMessage, error) {
+			return nil, fmt.Errorf("recv error")
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c.messageLoop(ctx)
+
+	if c.IsConnected() {
+		t.Error("expected disconnected after recv error")
+	}
+}
+
+func TestMessageLoop_ContextCancelled(t *testing.T) {
+	c := NewClient(Config{HeartbeatSeconds: 1}, zerolog.Nop(), nil)
+
+	// recv blocks until the signal channel is closed, simulating a long-running recv.
+	recvBlock := make(chan struct{})
+	mock := &mockConnectStream{
+		recvFn: func() (*pb.PlatformMessage, error) {
+			<-recvBlock
+			return nil, io.EOF
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		c.messageLoop(ctx)
+		close(done)
+	}()
+
+	// Cancel context and unblock recv so the loop can exit.
+	cancel()
+	close(recvBlock)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("messageLoop did not return after context cancel")
+	}
+}
+
+func TestMessageLoop_NilStream(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	c.mu.Lock()
+	c.stream = nil
+	c.connected = true
+	c.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c.messageLoop(ctx)
+
+	if c.IsConnected() {
+		t.Error("expected disconnected when stream is nil")
+	}
+}
+
+func TestFlushAndStop_EmptyCache(t *testing.T) {
+	c := NewClient(DefaultConfig(), zerolog.Nop(), nil)
+	err := c.FlushAndStop(context.Background(), "")
+	if err != nil {
+		t.Fatalf("FlushAndStop failed: %v", err)
+	}
+}
+
+func TestFlushAndStop_SendsBatchWithStream(t *testing.T) {
+	c := NewClient(Config{CacheMaxSize: 100}, zerolog.Nop(), nil)
+
+	for i := 0; i < 5; i++ {
+		c.cache.Add(collector.NewMetric("test", nil, map[string]interface{}{"v": float64(i)}, collector.Gauge, time.Now()))
+	}
+
+	mock := &mockConnectStream{}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	err := c.FlushAndStop(context.Background(), "")
+	if err != nil {
+		t.Fatalf("FlushAndStop failed: %v", err)
+	}
+
+	if got := mock.sendCount.Load(); got != 1 {
+		t.Errorf("expected 1 send call, got %d", got)
+	}
+}
+
+func TestFlushAndStop_NoPersistPathWithRemainingMetrics(t *testing.T) {
+	c := NewClient(Config{CacheMaxSize: 100}, zerolog.Nop(), nil)
+
+	for i := 0; i < 3; i++ {
+		c.cache.Add(collector.NewMetric("test", nil, map[string]interface{}{"v": float64(i)}, collector.Gauge, time.Now()))
+	}
+
+	mock := &mockConnectStream{
+		sendFn: func(*pb.AgentMessage) error {
+			return fmt.Errorf("send failed")
+		},
+	}
+	c.mu.Lock()
+	c.stream = mock
+	c.connected = true
+	c.mu.Unlock()
+
+	// No persist path -- metrics are lost but should not panic.
+	err := c.FlushAndStop(context.Background(), "")
+	if err != nil {
+		t.Fatalf("FlushAndStop failed: %v", err)
+	}
+}
+
+func TestLoadPersistedCache_InvalidJSON(t *testing.T) {
+	c := NewClient(Config{CacheMaxSize: 100}, zerolog.Nop(), nil)
+
+	tmpFile := t.TempDir() + "/bad-cache.json"
+	os.WriteFile(tmpFile, []byte("not valid json"), 0644)
+
+	c.loadPersistedCache(tmpFile)
+
+	// Cache should remain empty since JSON was invalid.
+	if c.cache.Len() != 0 {
+		t.Errorf("expected cache empty after invalid JSON, got %d", c.cache.Len())
+	}
+
+	// File should be removed.
+	if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
+		t.Error("invalid cache file should be removed")
+	}
+}
+
+func TestLoadPersistedCache_NonExistentFile(t *testing.T) {
+	c := NewClient(Config{CacheMaxSize: 100}, zerolog.Nop(), nil)
+	// Should not panic for a file that doesn't exist.
+	c.loadPersistedCache("/nonexistent/path/cache.json")
+}
+
 func TestLoadPersistedCache(t *testing.T) {
 	c := NewClient(Config{CacheMaxSize: 100}, zerolog.Nop(), nil)
 

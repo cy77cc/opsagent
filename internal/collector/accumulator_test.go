@@ -114,3 +114,54 @@ func TestAccumulatorCollectResets(t *testing.T) {
 		t.Fatalf("second Collect() len = %d, want 0 (buffer should be reset)", len(metrics2))
 	}
 }
+
+func TestAccumulatorAddGaugeWithTimestamp(t *testing.T) {
+	acc := NewAccumulator(100)
+	ts := time.Date(2025, 3, 10, 8, 30, 0, 0, time.UTC)
+	acc.AddGaugeWithTimestamp("temperature", map[string]string{"host": "s1"}, map[string]interface{}{"value": 98.6}, ts)
+
+	metrics := acc.Collect()
+	if len(metrics) != 1 {
+		t.Fatalf("Collect() len = %d, want 1", len(metrics))
+	}
+	m := metrics[0]
+	if m.Name() != "temperature" {
+		t.Errorf("Name() = %q, want %q", m.Name(), "temperature")
+	}
+	if m.Type() != Gauge {
+		t.Errorf("Type() = %v, want %v (Gauge)", m.Type(), Gauge)
+	}
+	if !m.Timestamp().Equal(ts) {
+		t.Errorf("Timestamp() = %v, want %v", m.Timestamp(), ts)
+	}
+	if m.Fields()["value"] != 98.6 {
+		t.Errorf("Fields[value] = %v, want 98.6", m.Fields()["value"])
+	}
+}
+
+func TestAccumulatorAddCounterWithTimestamp(t *testing.T) {
+	acc := NewAccumulator(100)
+	ts := time.Date(2025, 3, 10, 9, 0, 0, 0, time.UTC)
+	acc.AddCounterWithTimestamp("requests", map[string]string{"path": "/api"}, map[string]interface{}{"count": int64(42)}, ts)
+
+	metrics := acc.Collect()
+	if len(metrics) != 1 {
+		t.Fatalf("Collect() len = %d, want 1", len(metrics))
+	}
+	m := metrics[0]
+	if m.Name() != "requests" {
+		t.Errorf("Name() = %q, want %q", m.Name(), "requests")
+	}
+	if m.Type() != Counter {
+		t.Errorf("Type() = %v, want %v (Counter)", m.Type(), Counter)
+	}
+	if !m.Timestamp().Equal(ts) {
+		t.Errorf("Timestamp() = %v, want %v", m.Timestamp(), ts)
+	}
+	if m.Tags()["path"] != "/api" {
+		t.Errorf("Tags[path] = %q, want %q", m.Tags()["path"], "/api")
+	}
+	if m.Fields()["count"] != int64(42) {
+		t.Errorf("Fields[count] = %v, want 42", m.Fields()["count"])
+	}
+}

@@ -575,3 +575,234 @@ func TestValidateBoundaryReporterRetryIntervalMS(t *testing.T) {
 		})
 	}
 }
+
+// --- Load error paths ---
+
+func TestLoad_NonexistentFile(t *testing.T) {
+	_, err := Load("/tmp/nonexistent_config_file_12345.yaml")
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestLoad_InvalidYAML(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "bad.yaml")
+	if err := os.WriteFile(cfgPath, []byte("not: valid: yaml: ["), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	_, err := Load(cfgPath)
+	if err == nil {
+		t.Fatal("expected error for invalid YAML")
+	}
+}
+
+// --- Plugin validation ---
+
+func TestValidatePluginSocketPathRequired(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Plugin = PluginConfig{
+		Enabled:               true,
+		SocketPath:            "",
+		StartupTimeoutSeconds: 5,
+		RequestTimeoutSeconds: 30,
+		MaxConcurrentTasks:    4,
+		MaxResultBytes:        1024,
+		ChunkSizeBytes:        256,
+		SandboxProfile:        "strict",
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin.socket_path") {
+		t.Fatalf("expected plugin.socket_path error, got: %v", err)
+	}
+}
+
+func TestValidatePluginStartupTimeoutMustBePositive(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Plugin = PluginConfig{
+		Enabled:               true,
+		SocketPath:            "/tmp/sock",
+		StartupTimeoutSeconds: 0,
+		RequestTimeoutSeconds: 30,
+		MaxConcurrentTasks:    4,
+		MaxResultBytes:        1024,
+		ChunkSizeBytes:        256,
+		SandboxProfile:        "strict",
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin.startup_timeout_seconds") {
+		t.Fatalf("expected plugin.startup_timeout_seconds error, got: %v", err)
+	}
+}
+
+func TestValidatePluginRequestTimeoutMustBePositive(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Plugin = PluginConfig{
+		Enabled:               true,
+		SocketPath:            "/tmp/sock",
+		StartupTimeoutSeconds: 5,
+		RequestTimeoutSeconds: 0,
+		MaxConcurrentTasks:    4,
+		MaxResultBytes:        1024,
+		ChunkSizeBytes:        256,
+		SandboxProfile:        "strict",
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin.request_timeout_seconds") {
+		t.Fatalf("expected plugin.request_timeout_seconds error, got: %v", err)
+	}
+}
+
+func TestValidatePluginMaxConcurrentTasksMustBePositive(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Plugin = PluginConfig{
+		Enabled:               true,
+		SocketPath:            "/tmp/sock",
+		StartupTimeoutSeconds: 5,
+		RequestTimeoutSeconds: 30,
+		MaxConcurrentTasks:    0,
+		MaxResultBytes:        1024,
+		ChunkSizeBytes:        256,
+		SandboxProfile:        "strict",
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin.max_concurrent_tasks") {
+		t.Fatalf("expected plugin.max_concurrent_tasks error, got: %v", err)
+	}
+}
+
+func TestValidatePluginMaxResultBytesMustBePositive(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Plugin = PluginConfig{
+		Enabled:               true,
+		SocketPath:            "/tmp/sock",
+		StartupTimeoutSeconds: 5,
+		RequestTimeoutSeconds: 30,
+		MaxConcurrentTasks:    4,
+		MaxResultBytes:        0,
+		ChunkSizeBytes:        256,
+		SandboxProfile:        "strict",
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin.max_result_bytes") {
+		t.Fatalf("expected plugin.max_result_bytes error, got: %v", err)
+	}
+}
+
+func TestValidatePluginChunkSizeBytesMustBePositive(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Plugin = PluginConfig{
+		Enabled:               true,
+		SocketPath:            "/tmp/sock",
+		StartupTimeoutSeconds: 5,
+		RequestTimeoutSeconds: 30,
+		MaxConcurrentTasks:    4,
+		MaxResultBytes:        1024,
+		ChunkSizeBytes:        0,
+		SandboxProfile:        "strict",
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin.chunk_size_bytes") {
+		t.Fatalf("expected plugin.chunk_size_bytes error, got: %v", err)
+	}
+}
+
+// --- PluginGateway validation ---
+
+func TestValidatePluginGatewayPluginsDirRequired(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.PluginGateway = PluginGatewayConfig{
+		Enabled:                 true,
+		PluginsDir:              "",
+		StartupTimeoutSeconds:   10,
+		HealthCheckIntervalSecs: 30,
+		MaxRestarts:             3,
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin_gateway.plugins_dir") {
+		t.Fatalf("expected plugin_gateway.plugins_dir error, got: %v", err)
+	}
+}
+
+func TestValidatePluginGatewayStartupTimeoutMustBePositive(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.PluginGateway = PluginGatewayConfig{
+		Enabled:                 true,
+		PluginsDir:              "/etc/plugins",
+		StartupTimeoutSeconds:   0,
+		HealthCheckIntervalSecs: 30,
+		MaxRestarts:             3,
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin_gateway.startup_timeout_seconds") {
+		t.Fatalf("expected plugin_gateway.startup_timeout_seconds error, got: %v", err)
+	}
+}
+
+func TestValidatePluginGatewayHealthCheckIntervalMustBePositive(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.PluginGateway = PluginGatewayConfig{
+		Enabled:                 true,
+		PluginsDir:              "/etc/plugins",
+		StartupTimeoutSeconds:   10,
+		HealthCheckIntervalSecs: 0,
+		MaxRestarts:             3,
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin_gateway.health_check_interval_seconds") {
+		t.Fatalf("expected plugin_gateway.health_check_interval_seconds error, got: %v", err)
+	}
+}
+
+func TestValidatePluginGatewayMaxRestartsMustBeNonNegative(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.PluginGateway = PluginGatewayConfig{
+		Enabled:                 true,
+		PluginsDir:              "/etc/plugins",
+		StartupTimeoutSeconds:   10,
+		HealthCheckIntervalSecs: 30,
+		MaxRestarts:             -1,
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "plugin_gateway.max_restarts") {
+		t.Fatalf("expected plugin_gateway.max_restarts error, got: %v", err)
+	}
+}
+
+// --- Prometheus path validation ---
+
+func TestValidatePrometheusPathMustStartWithSlash(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Prometheus = PrometheusConfig{Enabled: true, Path: "metrics"}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "prometheus.path must start with /") {
+		t.Fatalf("expected prometheus.path prefix error, got: %v", err)
+	}
+}
+
+func TestValidatePrometheusPathEmpty(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Prometheus = PrometheusConfig{Enabled: true, Path: "  "}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "prometheus.path is required") {
+		t.Fatalf("expected prometheus.path required error, got: %v", err)
+	}
+}
+
+// --- AllowedCommands empty entry validation ---
+
+func TestValidateAllowedCommandsEmptyEntry(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Executor.AllowedCommands = []string{"echo", "  "}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "empty command") {
+		t.Fatalf("expected empty command error, got: %v", err)
+	}
+}
+
+// --- Plugin disabled skips checks ---
+
+func TestValidatePluginDisabledSkipsChecks(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Plugin = PluginConfig{Enabled: false}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error when plugin disabled, got: %v", err)
+	}
+}
+
+// --- PluginGateway disabled skips checks ---
+
+func TestValidatePluginGatewayDisabledSkipsChecks(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.PluginGateway = PluginGatewayConfig{Enabled: false}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error when plugin_gateway disabled, got: %v", err)
+	}
+}

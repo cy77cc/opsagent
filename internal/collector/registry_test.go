@@ -155,6 +155,40 @@ func TestDefaultRegistryConvenience(t *testing.T) {
 	}
 }
 
+func TestDefaultRegistryProcessorConvenience(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	RegisterProcessor("test-proc", func() Processor { return &nopProcessor{} })
+
+	f, ok := DefaultRegistry.GetProcessor("test-proc")
+	if !ok {
+		t.Fatal("DefaultRegistry.GetProcessor('test-proc') not found")
+	}
+	p := f()
+	if p.SampleConfig() != "" {
+		t.Errorf("SampleConfig() = %q, want empty", p.SampleConfig())
+	}
+}
+
+func TestDefaultRegistryAggregatorConvenience(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	RegisterAggregator("test-agg", func() Aggregator { return &sumAggregator{} })
+
+	f, ok := DefaultRegistry.GetAggregator("test-agg")
+	if !ok {
+		t.Fatal("DefaultRegistry.GetAggregator('test-agg') not found")
+	}
+	a := f()
+	if a.SampleConfig() != "" {
+		t.Errorf("SampleConfig() = %q, want empty", a.SampleConfig())
+	}
+}
+
 // nopProcessor is a test helper.
 type nopProcessor struct{}
 

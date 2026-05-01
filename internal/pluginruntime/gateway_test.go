@@ -1054,3 +1054,210 @@ func TestGateway_RestartBackoff(t *testing.T) {
 		}
 	}
 }
+
+func TestGateway_HealthStatus_Stopped(t *testing.T) {
+	g := NewGateway(GatewayConfig{}, zerolog.Nop())
+	status := g.HealthStatus()
+	if status.Status != "stopped" {
+		t.Errorf("expected status 'stopped', got %q", status.Status)
+	}
+	if status.Details == nil {
+		t.Fatal("expected non-nil details")
+	}
+	plugins, ok := status.Details["plugins_loaded"]
+	if !ok {
+		t.Fatal("expected 'plugins_loaded' in details")
+	}
+	names, ok := plugins.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", plugins)
+	}
+	if len(names) != 0 {
+		t.Errorf("expected 0 plugins, got %d", len(names))
+	}
+}
+
+func TestGateway_HealthStatus_Running(t *testing.T) {
+	g := NewGateway(GatewayConfig{}, zerolog.Nop())
+	g.ctx, g.cancel = context.WithCancel(context.Background())
+	defer g.cancel()
+
+	// Add a plugin to verify it appears in details.
+	g.plugins["p1"] = &ManagedPlugin{
+		Manifest: &PluginManifest{Name: "p1", Version: "1.0.0", TaskTypes: []string{"audit"}},
+		Status:   PluginStatusRunning,
+	}
+
+	status := g.HealthStatus()
+	if status.Status != "running" {
+		t.Errorf("expected status 'running', got %q", status.Status)
+	}
+	plugins := status.Details["plugins_loaded"].([]string)
+	if len(plugins) != 1 || plugins[0] != "p1" {
+		t.Errorf("expected [p1], got %v", plugins)
+	}
+}
+
+func TestGateway_ReloadPlugin_SuccessPath(t *testing.T) {
+	dir := t.TempDir()
+	sleepPath, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("sleep binary not found")
+	}
+
+	manifest := &PluginManifest{
+		Name:       "reload-plugin",
+		Version:    "1.0.0",
+		BinaryPath: sleepPath,
+		TaskTypes:  []string{"audit"},
+		Runtime:    "process",
+	}
+
+	// Write a dummy plugin.yaml so manifest is valid.
+	if err := os.MkdirAll(filepath.Join(dir, "reload-plugin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	logger := zerolog.Nop()
+	g := NewGateway(GatewayConfig{StartupTimeout: 1 * time.Second}, logger)
+
+	g.plugins["reload-plugin"] = &ManagedPlugin{
+		Manifest:   manifest,
+		Status:     PluginStatusRunning,
+		SocketPath: filepath.Join(dir, "reload-plugin.sock"),
+	}
+
+	// ReloadPlugin calls stopPlugin then loadPlugin. loadPlugin will fail
+	// because the socket is never created by sleep, but stopPlugin should
+	// have been called first (verified by the status change).
+	err = g.ReloadPlugin("reload-plugin")
+	if err == nil {
+		t.Fatal("expected error because plugin cannot create socket")
+	}
+	// Verify the plugin was removed from the map by loadPlugin's new entry,
+	// or that stopPlugin set the old entry to stopped. Since loadPlugin failed,
+	// the old entry should have been stopped.
+	p := g.GetPlugin("reload-plugin")
+	if p != nil && p.Status != PluginStatusStopped {
+		t.Errorf("expected plugin to be stopped after reload attempt, got %v", p.Status)
+	}
+}
+
+func TestGateway_EnablePlugin_SuccessPath(t *testing.T) {
+	sleepPath, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("sleep binary not found")
+	}
+
+	manifest := &PluginManifest{
+		Name:       "enable-plugin",
+		Version:    "1.0.0",
+		BinaryPath: sleepPath,
+		TaskTypes:  []string{"audit"},
+		Runtime:    "process",
+	}
+
+	logger := zerolog.Nop()
+	g := NewGateway(GatewayConfig{StartupTimeout: 1 * time.Second}, logger)
+
+	g.plugins["enable-plugin"] = &ManagedPlugin{
+		Manifest:   manifest,
+		Status:     PluginStatusDisabled,
+		SocketPath: "/tmp/enable-plugin.sock",
+	}
+
+	// EnablePlugin calls loadPlugin. loadPlugin will fail because the socket
+	// is never created, but it verifies the code path is exercised.
+	err = g.EnablePlugin("enable-plugin")
+	if err == nil {
+		t.Fatal("expected error because plugin cannot create socket")
+	}
+}
+
+func TestGateway_HealthCheckAll_WithRestart(t *testing.T) {
+	logger := zerolog.Nop()
+	g := NewGateway(GatewayConfig{
+		MaxRestarts:    1,
+		RestartBackoff: time.Millisecond,
+		StartupTimeout: 100 * time.Millisecond,
+	}, logger)
+	g.ctx = context.Background()
+
+	// Plugin with a broken ping client that will fail health check.
+	c := NewRPCClient("/tmp/broken.sock")
+	c.dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, net.ErrClosed
+	}
+
+	manifest := &PluginManifest{
+		Name:       "unhealthy",
+		Version:    "1.0.0",
+		BinaryPath: "/nonexistent/binary",
+		TaskTypes:  []string{"audit"},
+		Runtime:    "process",
+	}
+
+	g.plugins["unhealthy"] = &ManagedPlugin{
+		Manifest: manifest,
+		Status:   PluginStatusRunning,
+		Client:   c,
+	}
+
+	g.healthCheckAll()
+
+	// After health check failure with restartable plugin:
+	// 1. stopPlugin is called (status -> stopped)
+	// 2. loadPlugin is called (fails because binary doesn't exist)
+	// 3. Status is set to PluginStatusError
+	p := g.GetPlugin("unhealthy")
+	if p == nil {
+		t.Fatal("expected plugin to still exist")
+	}
+	if p.Status != PluginStatusError {
+		t.Errorf("expected status %v, got %v", PluginStatusError, p.Status)
+	}
+}
+
+func TestGateway_HealthCheckAll_RestartContextCancelled(t *testing.T) {
+	logger := zerolog.Nop()
+	g := NewGateway(GatewayConfig{
+		MaxRestarts:    1,
+		RestartBackoff: 10 * time.Second, // Long backoff to ensure context cancels first.
+	}, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	g.ctx = ctx
+
+	c := NewRPCClient("/tmp/broken.sock")
+	c.dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, net.ErrClosed
+	}
+
+	g.plugins["unhealthy"] = &ManagedPlugin{
+		Manifest: &PluginManifest{
+			Name:       "unhealthy",
+			Version:    "1.0.0",
+			BinaryPath: "/nonexistent/binary",
+			TaskTypes:  []string{"audit"},
+			Runtime:    "process",
+		},
+		Status: PluginStatusRunning,
+		Client: c,
+	}
+
+	// Cancel the context in a goroutine after a short delay.
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+	}()
+
+	g.healthCheckAll()
+
+	// Plugin should have been stopped by stopPlugin.
+	p := g.GetPlugin("unhealthy")
+	if p == nil {
+		t.Fatal("expected plugin to still exist")
+	}
+	if p.Status != PluginStatusStopped {
+		t.Errorf("expected status %v, got %v", PluginStatusStopped, p.Status)
+	}
+}

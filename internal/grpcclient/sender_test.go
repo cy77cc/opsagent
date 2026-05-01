@@ -190,3 +190,160 @@ func TestExecResultToProtoNilStats(t *testing.T) {
 		t.Error("expected timed_out=true")
 	}
 }
+
+func TestSenderNewConfigUpdateAck(t *testing.T) {
+	msg := NewConfigUpdateAck("cfg-ref-1", true, "")
+
+	ack := msg.GetAck()
+	if ack == nil {
+		t.Fatal("expected ack payload")
+	}
+	if ack.RefId != "cfg-ref-1" {
+		t.Errorf("expected cfg-ref-1, got %s", ack.RefId)
+	}
+	if !ack.Success {
+		t.Error("expected success=true")
+	}
+	if ack.Error != "" {
+		t.Errorf("expected empty error, got %s", ack.Error)
+	}
+}
+
+func TestSenderNewConfigUpdateAck_Failure(t *testing.T) {
+	msg := NewConfigUpdateAck("cfg-ref-2", false, "invalid config")
+
+	ack := msg.GetAck()
+	if ack == nil {
+		t.Fatal("expected ack payload")
+	}
+	if ack.RefId != "cfg-ref-2" {
+		t.Errorf("expected cfg-ref-2, got %s", ack.RefId)
+	}
+	if ack.Success {
+		t.Error("expected success=false")
+	}
+	if ack.Error != "invalid config" {
+		t.Errorf("expected 'invalid config', got %s", ack.Error)
+	}
+}
+
+func TestSenderExecResultWithAllFields(t *testing.T) {
+	result := &ExecResult{
+		TaskID:    "task-full",
+		ExitCode:  42,
+		Duration:  10 * time.Second,
+		TimedOut:  true,
+		Truncated: true,
+		Killed:    true,
+		Stats: &ExecStats{
+			PeakMemoryBytes: 2048,
+			CPUTimeUserMs:   100,
+			CPUTimeSystemMs: 50,
+			ProcessCount:    3,
+			BytesWritten:    4096,
+			BytesRead:       8192,
+		},
+	}
+	msg := NewExecResultMessage(result)
+
+	pr := msg.GetExecResult()
+	if pr == nil {
+		t.Fatal("expected exec_result payload")
+	}
+	if pr.TaskId != "task-full" {
+		t.Errorf("expected task-full, got %s", pr.TaskId)
+	}
+	if pr.ExitCode != 42 {
+		t.Errorf("expected exit code 42, got %d", pr.ExitCode)
+	}
+	if pr.DurationMs != 10000 {
+		t.Errorf("expected 10000ms, got %d", pr.DurationMs)
+	}
+	if !pr.TimedOut {
+		t.Error("expected timed_out=true")
+	}
+	if !pr.Truncated {
+		t.Error("expected truncated=true")
+	}
+	if !pr.Killed {
+		t.Error("expected killed=true")
+	}
+	if pr.Stats == nil {
+		t.Fatal("expected stats")
+	}
+	if pr.Stats.CpuTimeSystemMs != 50 {
+		t.Errorf("expected system cpu time 50, got %d", pr.Stats.CpuTimeSystemMs)
+	}
+	if pr.Stats.BytesWritten != 4096 {
+		t.Errorf("expected bytes written 4096, got %d", pr.Stats.BytesWritten)
+	}
+	if pr.Stats.BytesRead != 8192 {
+		t.Errorf("expected bytes read 8192, got %d", pr.Stats.BytesRead)
+	}
+}
+
+func TestExecResultToProto_TruncatedAndKilled(t *testing.T) {
+	result := &ExecResult{
+		TaskID:    "task-tk",
+		ExitCode:  137,
+		Duration:  30 * time.Second,
+		TimedOut:  false,
+		Truncated: true,
+		Killed:    true,
+		Stats: &ExecStats{
+			PeakMemoryBytes: 512 * 1024,
+			CPUTimeUserMs:   200,
+			CPUTimeSystemMs: 100,
+			ProcessCount:    2,
+			BytesWritten:    1024,
+			BytesRead:       2048,
+		},
+	}
+	pr := result.ToProto()
+
+	if pr.TaskId != "task-tk" {
+		t.Errorf("expected task-tk, got %s", pr.TaskId)
+	}
+	if pr.ExitCode != 137 {
+		t.Errorf("expected exit code 137, got %d", pr.ExitCode)
+	}
+	if pr.DurationMs != 30000 {
+		t.Errorf("expected 30000ms, got %d", pr.DurationMs)
+	}
+	if pr.TimedOut {
+		t.Error("expected timed_out=false")
+	}
+	if !pr.Truncated {
+		t.Error("expected truncated=true")
+	}
+	if !pr.Killed {
+		t.Error("expected killed=true")
+	}
+	if pr.Stats == nil {
+		t.Fatal("expected non-nil stats")
+	}
+	if pr.Stats.PeakMemoryBytes != 512*1024 {
+		t.Errorf("expected peak memory %d, got %d", 512*1024, pr.Stats.PeakMemoryBytes)
+	}
+	if pr.Stats.ProcessCount != 2 {
+		t.Errorf("expected process count 2, got %d", pr.Stats.ProcessCount)
+	}
+}
+
+func TestSenderNewExecOutputMessage_EmptyData(t *testing.T) {
+	msg := NewExecOutputMessage("task-empty", "stderr", nil)
+
+	out := msg.GetExecOutput()
+	if out == nil {
+		t.Fatal("expected exec_output payload")
+	}
+	if out.TaskId != "task-empty" {
+		t.Errorf("expected task-empty, got %s", out.TaskId)
+	}
+	if out.Stream != "stderr" {
+		t.Errorf("expected stderr, got %s", out.Stream)
+	}
+	if out.Data != nil {
+		t.Errorf("expected nil data, got %v", out.Data)
+	}
+}

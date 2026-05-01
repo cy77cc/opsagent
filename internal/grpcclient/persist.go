@@ -9,8 +9,6 @@ import (
 )
 
 // persistedMetric is a serializable representation of a metric for disk persistence.
-//
-//nolint:unused
 type persistedMetric struct {
 	Name      string                 `json:"name"`
 	Tags      map[string]string      `json:"tags"`
@@ -20,8 +18,6 @@ type persistedMetric struct {
 }
 
 // persistMetrics writes metrics to a JSON file at the given path.
-//
-//nolint:unused
 func persistMetrics(metrics []*collector.Metric, path string) error {
 	var persisted []persistedMetric
 	for _, m := range metrics {
@@ -44,8 +40,6 @@ func persistMetrics(metrics []*collector.Metric, path string) error {
 }
 
 // loadMetrics reads persisted metrics from a JSON file.
-//
-//nolint:unused
 func loadMetrics(path string) ([]*collector.Metric, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -72,7 +66,6 @@ func loadMetrics(path string) ([]*collector.Metric, error) {
 	return metrics, nil
 }
 
-//nolint:unused
 func metricTypeString(t collector.MetricType) string {
 	switch t {
 	case collector.Counter:
@@ -84,7 +77,6 @@ func metricTypeString(t collector.MetricType) string {
 	}
 }
 
-//nolint:unused
 func metricTypeFromString(s string) collector.MetricType {
 	switch s {
 	case "counter":

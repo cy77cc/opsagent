@@ -112,3 +112,144 @@ func TestToReloadConfig_PreservesConfigMaps(t *testing.T) {
 		t.Errorf("expected config num 42, got %v", rc.Inputs[0].Config["num"])
 	}
 }
+
+func TestCollectorReloader_Apply(t *testing.T) {
+	// Save and restore default registry.
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	RegisterInput("test-input", func() Input { return &mockInput{name: "test-input"} })
+	RegisterOutput("test-output", func() Output { return &mockOutput{name: "test-output"} })
+
+	sched := NewScheduler(nil, nil, nil, nil, zerolog.Nop())
+	reloader := NewCollectorReloader(sched, zerolog.Nop())
+
+	cfg := &config.Config{
+		Collector: config.CollectorConfig{
+			Inputs: []config.PluginInstanceConfig{
+				{Type: "test-input", Config: map[string]interface{}{}},
+			},
+			Outputs: []config.PluginInstanceConfig{
+				{Type: "test-output", Config: map[string]interface{}{}},
+			},
+		},
+	}
+
+	err := reloader.Apply(cfg)
+	if err != nil {
+		t.Fatalf("Apply() error: %v", err)
+	}
+}
+
+func TestCollectorReloader_Rollback(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	RegisterInput("test-input", func() Input { return &mockInput{name: "test-input"} })
+
+	sched := NewScheduler(nil, nil, nil, nil, zerolog.Nop())
+	reloader := NewCollectorReloader(sched, zerolog.Nop())
+
+	oldCfg := &config.Config{
+		Collector: config.CollectorConfig{
+			Inputs: []config.PluginInstanceConfig{
+				{Type: "test-input", Config: map[string]interface{}{"key": "val"}},
+			},
+		},
+	}
+
+	err := reloader.Rollback(oldCfg)
+	if err != nil {
+		t.Fatalf("Rollback() error: %v", err)
+	}
+}
+
+func TestCollectorReloader_Apply_UnknownInput(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	sched := NewScheduler(nil, nil, nil, nil, zerolog.Nop())
+	reloader := NewCollectorReloader(sched, zerolog.Nop())
+
+	cfg := &config.Config{
+		Collector: config.CollectorConfig{
+			Inputs: []config.PluginInstanceConfig{
+				{Type: "nonexistent", Config: map[string]interface{}{}},
+			},
+		},
+	}
+
+	err := reloader.Apply(cfg)
+	if err == nil {
+		t.Fatal("expected error for unknown input type, got nil")
+	}
+}
+
+func TestCollectorReloader_Apply_UnknownProcessor(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	sched := NewScheduler(nil, nil, nil, nil, zerolog.Nop())
+	reloader := NewCollectorReloader(sched, zerolog.Nop())
+
+	cfg := &config.Config{
+		Collector: config.CollectorConfig{
+			Processors: []config.PluginInstanceConfig{
+				{Type: "nonexistent", Config: map[string]interface{}{}},
+			},
+		},
+	}
+
+	err := reloader.Apply(cfg)
+	if err == nil {
+		t.Fatal("expected error for unknown processor type, got nil")
+	}
+}
+
+func TestCollectorReloader_Apply_UnknownAggregator(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	sched := NewScheduler(nil, nil, nil, nil, zerolog.Nop())
+	reloader := NewCollectorReloader(sched, zerolog.Nop())
+
+	cfg := &config.Config{
+		Collector: config.CollectorConfig{
+			Aggregators: []config.PluginInstanceConfig{
+				{Type: "nonexistent", Config: map[string]interface{}{}},
+			},
+		},
+	}
+
+	err := reloader.Apply(cfg)
+	if err == nil {
+		t.Fatal("expected error for unknown aggregator type, got nil")
+	}
+}
+
+func TestCollectorReloader_Apply_UnknownOutput(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	sched := NewScheduler(nil, nil, nil, nil, zerolog.Nop())
+	reloader := NewCollectorReloader(sched, zerolog.Nop())
+
+	cfg := &config.Config{
+		Collector: config.CollectorConfig{
+			Outputs: []config.PluginInstanceConfig{
+				{Type: "nonexistent", Config: map[string]interface{}{}},
+			},
+		},
+	}
+
+	err := reloader.Apply(cfg)
+	if err == nil {
+		t.Fatal("expected error for unknown output type, got nil")
+	}
+}

@@ -290,3 +290,203 @@ func TestApplyEmptySlice(t *testing.T) {
 		t.Errorf("expected 0 metrics, got %d", len(result))
 	}
 }
+
+func TestInitHappyPath(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"tags": map[string]interface{}{
+			"env":    "production",
+			"region": "us-east-1",
+		},
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"tag":       "critical",
+				"value":     "true",
+				"when_name": "disk_usage",
+			},
+		},
+	}
+
+	if err := p.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(p.staticTags) != 2 {
+		t.Fatalf("expected 2 static tags, got %d", len(p.staticTags))
+	}
+	if p.staticTags["env"] != "production" {
+		t.Errorf("expected env=production, got %q", p.staticTags["env"])
+	}
+	if p.staticTags["region"] != "us-east-1" {
+		t.Errorf("expected region=us-east-1, got %q", p.staticTags["region"])
+	}
+
+	if len(p.conditions) != 1 {
+		t.Fatalf("expected 1 condition, got %d", len(p.conditions))
+	}
+	if p.conditions[0].Tag != "critical" {
+		t.Errorf("expected condition tag=critical, got %q", p.conditions[0].Tag)
+	}
+	if p.conditions[0].Value != "true" {
+		t.Errorf("expected condition value=true, got %q", p.conditions[0].Value)
+	}
+	if p.conditions[0].WhenName != "disk_usage" {
+		t.Errorf("expected condition when_name=disk_usage, got %q", p.conditions[0].WhenName)
+	}
+}
+
+func TestInitTagsNotAMap(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"tags": "not-a-map",
+	}
+
+	err := p.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when tags is not a map")
+	}
+	if expected := `tagger: "tags" must be a map, got string`; err.Error() != expected {
+		t.Errorf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
+func TestInitConditionsNotAList(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"conditions": "not-a-list",
+	}
+
+	err := p.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when conditions is not a list")
+	}
+	if expected := `tagger: "conditions" must be a list, got string`; err.Error() != expected {
+		t.Errorf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
+func TestInitConditionEntryNotAMap(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"conditions": []interface{}{
+			"not-a-map",
+		},
+	}
+
+	err := p.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when condition entry is not a map")
+	}
+	if expected := "tagger: condition entry 0 must be a map, got string"; err.Error() != expected {
+		t.Errorf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
+func TestInitConditionEntryNotAMapAtIndex(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{"tag": "a", "value": "1", "when_name": "x"},
+			42,
+		},
+	}
+
+	err := p.Init(cfg)
+	if err == nil {
+		t.Fatal("expected error when condition entry at index 1 is not a map")
+	}
+	if expected := "tagger: condition entry 1 must be a map, got int"; err.Error() != expected {
+		t.Errorf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
+func TestInitOnlyTags(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"tags": map[string]interface{}{
+			"env": "staging",
+		},
+	}
+
+	if err := p.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(p.staticTags) != 1 {
+		t.Fatalf("expected 1 static tag, got %d", len(p.staticTags))
+	}
+	if p.staticTags["env"] != "staging" {
+		t.Errorf("expected env=staging, got %q", p.staticTags["env"])
+	}
+	if p.conditions != nil {
+		t.Errorf("expected nil conditions when not provided, got %v", p.conditions)
+	}
+}
+
+func TestInitOnlyConditions(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"tag":       "alert",
+				"value":     "high",
+				"when_name": "cpu",
+			},
+		},
+	}
+
+	if err := p.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.staticTags != nil {
+		t.Errorf("expected nil static tags when not provided, got %v", p.staticTags)
+	}
+	if len(p.conditions) != 1 {
+		t.Fatalf("expected 1 condition, got %d", len(p.conditions))
+	}
+	if p.conditions[0].Tag != "alert" {
+		t.Errorf("expected condition tag=alert, got %q", p.conditions[0].Tag)
+	}
+}
+
+func TestInitEmptyConfig(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{}
+
+	if err := p.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.staticTags != nil {
+		t.Errorf("expected nil static tags, got %v", p.staticTags)
+	}
+	if p.conditions != nil {
+		t.Errorf("expected nil conditions, got %v", p.conditions)
+	}
+}
+
+func TestInitTagsValueConvertedToString(t *testing.T) {
+	p := &Processor{}
+	cfg := map[string]interface{}{
+		"tags": map[string]interface{}{
+			"count": 42,
+			"rate":  3.14,
+			"ok":    true,
+		},
+	}
+
+	if err := p.Init(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.staticTags["count"] != "42" {
+		t.Errorf("expected count=42, got %q", p.staticTags["count"])
+	}
+	if p.staticTags["rate"] != "3.14" {
+		t.Errorf("expected rate=3.14, got %q", p.staticTags["rate"])
+	}
+	if p.staticTags["ok"] != "true" {
+		t.Errorf("expected ok=true, got %q", p.staticTags["ok"])
+	}
+}

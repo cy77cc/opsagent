@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -227,4 +228,110 @@ func TestSchedulerAppliesStaticTags(t *testing.T) {
 	}
 
 	sched.Stop()
+}
+
+// errorInput is an Input whose Gather always returns an error.
+type errorInput struct {
+	err error
+}
+
+func (e *errorInput) Init(_ map[string]interface{}) error         { return nil }
+func (e *errorInput) Gather(_ context.Context, _ Accumulator) error { return e.err }
+func (e *errorInput) SampleConfig() string                         { return "" }
+
+func TestSchedulerGatherOnce_ErrorPath(t *testing.T) {
+	input := &errorInput{err: fmt.Errorf("gather failure")}
+	si := ScheduledInput{
+		Input:    input,
+		Interval: 50 * time.Millisecond,
+	}
+
+	sched := NewScheduler([]ScheduledInput{si}, nil, nil, nil, zerolog.Nop())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := sched.Start(ctx)
+
+	// Wait for the gather to run; since it errors, no metrics should appear.
+	// We just verify the scheduler doesn't crash and can be stopped cleanly.
+	time.Sleep(150 * time.Millisecond)
+	sched.Stop()
+
+	// Channel should be closed.
+	_, ok := <-ch
+	if ok {
+		t.Error("channel should be closed after Stop()")
+	}
+}
+
+// pushAggregator is an Aggregator that tracks Push calls and emits a metric.
+type pushAggregator struct {
+	pushCount int32
+}
+
+func (p *pushAggregator) Init(_ map[string]interface{}) error { return nil }
+func (p *pushAggregator) Add(_ *Metric)                       {}
+func (p *pushAggregator) Push(acc Accumulator) {
+	atomic.AddInt32(&p.pushCount, 1)
+	acc.AddFields("agg_metric", nil, map[string]interface{}{"v": 1.0})
+}
+func (p *pushAggregator) Reset()               {}
+func (p *pushAggregator) SampleConfig() string   { return "" }
+
+func TestSchedulerAggregatorPush(t *testing.T) {
+	input := newTestInput("cpu", nil, map[string]interface{}{"v": 1.0})
+	si := ScheduledInput{Input: input, Interval: 50 * time.Millisecond}
+
+	agg := &pushAggregator{}
+
+	sched := NewScheduler([]ScheduledInput{si}, nil, []Aggregator{agg}, nil, zerolog.Nop())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := sched.Start(ctx)
+
+	// Drain at least one input metric to confirm the scheduler is running.
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for input metrics")
+	}
+
+	sched.Stop()
+
+	// After Stop, runAggregatorPush does a final push. Verify push was called.
+	count := atomic.LoadInt32(&agg.pushCount)
+	if count == 0 {
+		t.Error("expected pushAggregator.Push to be called at least once")
+	}
+}
+
+func TestSchedulerReload_WithAggregator(t *testing.T) {
+	orig := DefaultRegistry
+	DefaultRegistry = NewRegistry()
+	defer func() { DefaultRegistry = orig }()
+
+	RegisterInput("test-input", func() Input { return &mockInput{name: "test-input"} })
+
+	agg := &pushAggregator{}
+
+	// Reload on a stopped scheduler (no Start called) exercises the
+	// aggregator-push-on-teardown path without the WaitGroup race
+	// that Start's closer goroutine would cause.
+	sched := NewScheduler(nil, nil, []Aggregator{agg}, nil, zerolog.Nop())
+
+	err := sched.Reload(context.Background(), ReloadConfig{
+		Inputs: []PluginConfig{
+			{Type: "test-input", Config: map[string]interface{}{}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Reload() error: %v", err)
+	}
+
+	// The aggregator Push should have been called during teardown.
+	count := atomic.LoadInt32(&agg.pushCount)
+	if count == 0 {
+		t.Error("expected pushAggregator.Push to be called during Reload teardown")
+	}
 }
