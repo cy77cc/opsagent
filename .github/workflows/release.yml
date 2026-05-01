@@ -36,9 +36,9 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
             go build -trimpath -ldflags="-s -w \
-              -X github.com/cy77cc/opsagent/internal/app.Version=${{ steps.version.outputs.tag }} \
-              -X github.com/cy77cc/opsagent/internal/app.GitCommit=$(git rev-parse --short HEAD) \
-              -X github.com/cy77cc/opsagent/internal/app.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              -X main.version=${{ steps.version.outputs.tag }} \
+              -X main.gitCommit=$(git rev-parse --short HEAD) \
+              -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -o dist/${{ matrix.goarch }}/${{ env.APP_NAME }} ./cmd/agent
 
       - name: Smoke test

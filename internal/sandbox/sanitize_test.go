@@ -110,9 +110,6 @@ func TestBuildSandboxEnv(t *testing.T) {
 		if strings.HasPrefix(e, "LD_LIBRARY_PATH=") {
 			t.Error("LD_LIBRARY_PATH should be blocked")
 		}
-		if e == "MY_VAR=value" {
-			// good
-		}
 	}
 	if !found {
 		t.Error("PATH should be present")

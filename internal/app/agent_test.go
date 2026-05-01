@@ -2521,11 +2521,6 @@ func TestStartSubsystems_GRPCStartError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestShutdown_PluginGatewayStopError(t *testing.T) {
-	type mockPluginGatewayStopErr struct {
-		*mockPluginGateway
-	}
-	// Can't easily embed stop error in the mock, so use a custom wrapper.
-
 	gw := newMockPluginGateway()
 
 	agent, err := NewAgent(minimalConfig(), zerolog.Nop(),

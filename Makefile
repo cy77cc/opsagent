@@ -24,9 +24,9 @@ test-cover:
 
 build:
 	go build -ldflags="-s -w \
-		-X github.com/cy77cc/opsagent/internal/app.Version=$(VERSION) \
-		-X github.com/cy77cc/opsagent/internal/app.GitCommit=$(shell git rev-parse --short HEAD) \
-		-X github.com/cy77cc/opsagent/internal/app.BuildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		-X main.version=$(VERSION) \
+		-X main.gitCommit=$(shell git rev-parse --short HEAD) \
+		-X main.buildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
 		-o bin/$(APP_NAME) ./cmd/agent
 
 bench:
